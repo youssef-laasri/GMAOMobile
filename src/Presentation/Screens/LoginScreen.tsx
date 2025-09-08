@@ -220,15 +220,22 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         }
         else {
           let lastConnection = await SqlLIteService.getLastRow(db)
-          if (lastConnection != null && !isOlderThan24Hours(lastConnection?.createdAt)) {
+          console.log(isOlderThan24Hours(lastConnection?.created_at), 'isOlderThan24Hours', lastConnection != null && isOlderThan24Hours(lastConnection?.created_at));
+          
+          if (lastConnection != null && isOlderThan24Hours(lastConnection?.created_at)) {
+            // Last connection is older than 24 hours, user needs to reconnect
+            console.log('Last connection is older than 24 hours, requiring reconnection');
+            return false;
+          } else if (lastConnection != null && !isOlderThan24Hours(lastConnection?.created_at)) {
             setLoading(true);
             setMatricule(lastConnection.username)
             await AsyncStorage.setItem('@token', lastConnection.value as string);
+console.log(lastConnection.created_at, 'lastConnection');
 
             // Perform sync check for immeubles even on auto-login
             try {
               console.log('🔄 Starting immeubles sync check on auto-login...');
-              const addressMac = await getDeviceIdentifier()
+              const addressMac = await getPersistentDeviceId()
               // Create sync input with current timestamp and device info
               const syncInput = apiService.createCheckSyncInput(
                 1, // Use current timestamp as sync identifier
@@ -287,11 +294,15 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
             }
 
             const rep = await apiService.getCountOfItems();
+            console.log(rep, 'rep');
+            console.log(lastConnection.username, 'lastConnection', lastConnection.name);
+            
+            
             await AsyncStorage.setItem('@nbrDrapeaux', rep.nbrDrapeaux?.toString() as string);
             await AsyncStorage.setItem('@nbrAlertes', rep.nbrAlertes?.toString() as string);
             await AsyncStorage.setItem('@nbrintervention', rep.nbrIntervention?.toString() as string);
-            await AsyncStorage.setItem('@matricule', lastConnection.username as string);
-            await AsyncStorage.setItem('@name', lastConnection.name as string);
+            await AsyncStorage.setItem('@matricule', lastConnection?.username as string);
+            await AsyncStorage.setItem('@name', lastConnection?.name as string);
             navigation.navigate(screenNames.HomeScreen as never)
           }
         }
@@ -364,11 +375,13 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
             <TouchableOpacity
               style={styles.iconContainer}
               onPress={togglePasswordVisibility}
-            // activeOpacity={0.7}
+              activeOpacity={0.7}
             >
-              <Text style={styles.iconText}>
-                {showPassword ? "***" : "👁️"}
-              </Text>
+              <Image
+                source={showPassword ? require('../../../assets/Icons/Crossed-Eye.png') : require('../../../assets/Icons/Eye.png')}
+                style={styles.eyeIcon}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           </View>
 
@@ -600,16 +613,17 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     position: 'absolute',
-    right: 0,
+    right: 10,
     top: 0,
     bottom: 15,
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    alignItems: 'center',
+    width: 40,
   },
-  iconText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+  eyeIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#666',
   },
   modalOverlay: {
     flex: 1,

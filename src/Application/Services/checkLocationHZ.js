@@ -1,7 +1,32 @@
-import Geolocation from 'react-native-geolocation-service';
-import { getDistance } from 'geolib';
+import Geolocation from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+
+/**
+ * Helper function to calculate distance between two coordinates using Haversine formula
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lon1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lon2 - Longitude of second point
+ * @returns {number} Distance in meters
+ */
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+  function deg2rad(deg) {
+    return deg * (Math.PI / 180);
+  }
+  const R = 6371000; // Radius of the earth in meters
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) *
+    Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in meters
+  return d;
+}
 
 /**
  * Class to handle location verification and comparison with buildings
@@ -132,27 +157,28 @@ class LocationVerifier {
         this.locationListeners.add(callback);
       }
 
-      this.watchId = Geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          this.currentLocation = { latitude, longitude };
-          
-          // Notify all listeners
-          this.locationListeners.forEach(listener => {
-            listener(this.currentLocation);
-          });
-        },
-        (error) => {
-          console.error('Error watching location:', error);
-          reject(error);
-        },
-        { 
-          enableHighAccuracy: true, 
-          distanceFilter: 10, // minimum distance (meters) between updates
-          interval: 5000, // Android only
-          fastestInterval: 2000, // Android only
-        }
-      );
+      // Use setInterval to simulate watchPosition with @react-native-community/geolocation
+      this.watchId = setInterval(() => {
+        Geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            this.currentLocation = { latitude, longitude };
+            
+            // Notify all listeners
+            this.locationListeners.forEach(listener => {
+              listener(this.currentLocation);
+            });
+          },
+          (error) => {
+            console.error('Error getting location:', error);
+          },
+          { 
+            enableHighAccuracy: true, 
+            timeout: 10000, 
+            maximumAge: 5000 
+          }
+        );
+      }, 5000); // Update every 5 seconds
 
       resolve(this.watchId);
     });
@@ -163,7 +189,7 @@ class LocationVerifier {
    */
   stopTracking() {
     if (this.watchId !== null) {
-      Geolocation.clearWatch(this.watchId);
+      clearInterval(this.watchId);
       this.watchId = null;
     }
   }
@@ -205,9 +231,11 @@ class LocationVerifier {
       return null;
     }
 
-    const distance = getDistance(
-      locationToCheck,
-      building.location
+    const distance = getDistanceFromLatLonInMeters(
+      locationToCheck.latitude,
+      locationToCheck.longitude,
+      building.location.latitude,
+      building.location.longitude
     );
 
     return {
@@ -244,9 +272,11 @@ class LocationVerifier {
 
     const results = [];
     this.buildings.forEach((building) => {
-      const distance = getDistance(
-        locationToCheck,
-        building.location
+      const distance = getDistanceFromLatLonInMeters(
+        locationToCheck.latitude,
+        locationToCheck.longitude,
+        building.location.latitude,
+        building.location.longitude
       );
 
       results.push({

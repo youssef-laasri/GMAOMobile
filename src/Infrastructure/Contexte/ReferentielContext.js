@@ -125,10 +125,26 @@ export const ReferentielProvider = ({ children }) => {
             if (alertes) dispatch({ type: 'SET_ALERTES', payload: JSON.parse(alertes) });
             if (drapeaux) dispatch({ type: 'SET_DRAPEAUX', payload: JSON.parse(drapeaux) });
             if (interventions) dispatch({ type: 'SET_INTERVENTIONS', payload: JSON.parse(interventions) });
-            if (priPrimes) dispatch({ type: 'SET_PRI_PRIMES', payload: JSON.parse(priPrimes) });
+            if (priPrimes) {
+                console.log('📥 Loading priPrimes from storage:', priPrimes);
+                const parsedPriPrimes = JSON.parse(priPrimes);
+                console.log('📥 Parsed priPrimes:', parsedPriPrimes);
+                dispatch({ type: 'SET_PRI_PRIMES', payload: parsedPriPrimes });
+            } else {
+                console.log('📥 No priPrimes found in storage');
+            }
             if (lastSyncTime) dispatch({ type: 'SET_LAST_SYNC_TIME', payload: JSON.parse(lastSyncTime) });
 
             console.log('Referentiel data loaded from storage');
+            console.log('📊 Current state after loading:', {
+                modeReglement: state.modeReglement.length,
+                articles: state.articles.length,
+                immeubles: state.immeubles.length,
+                alertes: state.alertes.length,
+                drapeaux: state.drapeaux.length,
+                interventions: state.interventions.length,
+                priPrimes: state.priPrimes.length
+            });
         } catch (error) {
             console.error('Error loading referentiel from storage:', error);
         }
@@ -157,7 +173,7 @@ export const ReferentielProvider = ({ children }) => {
     const loadImmeublesFromSQLite = async () => {
         try {
             const db = await SqlLIteService.getDBConnection();
-            const immeubles = await SqlLIteService.getAllImmeubles(db);
+            const immeubles = await SqlLIteService.getImmeubles(db);
             if (immeubles && immeubles.length > 0) {
                 dispatch({ type: 'SET_IMMEUBLES', payload: immeubles });
                 await saveReferentielToStorage(immeubles, '@referentiel_immeubles');
@@ -191,6 +207,8 @@ export const ReferentielProvider = ({ children }) => {
             console.log('🔄 Starting referentiel data sync...');
 
             // Fetch all referentiel data in parallel
+            console.log('🔄 Starting API calls for referentiel data...');
+            
             const [
                 modeReglementResponse,
                 articlesResponse,
@@ -212,6 +230,9 @@ export const ReferentielProvider = ({ children }) => {
                 Promise.resolve({ data: [] }).catch(err => ({ error: err })),
                 apiService.getAllPriPrimes().catch(err => ({ error: err }))
             ]);
+            
+            console.log('🔄 All API responses received');
+            console.log('🔄 Pri Primes API response:', priPrimesResponse);
 
             // Process responses and update state
             const syncResults = [];
@@ -238,10 +259,33 @@ export const ReferentielProvider = ({ children }) => {
             await loadCountData();
 
             // Pri Primes
+            console.log('🔄 Pri Primes Response:', priPrimesResponse);
+            console.log('🔄 Pri Primes Response type:', typeof priPrimesResponse);
+            console.log('🔄 Pri Primes Response has error:', priPrimesResponse && priPrimesResponse.error);
+            console.log('🔄 Pri Primes Response length:', priPrimesResponse && Array.isArray(priPrimesResponse) ? priPrimesResponse.length : 'Not an array');
+            
             if (priPrimesResponse && !priPrimesResponse.error) {
-                dispatch({ type: 'SET_PRI_PRIMES', payload: priPrimesResponse });
-                await saveReferentielToStorage(priPrimesResponse, '@referentiel_pri_primes');
+                console.log('✅ Setting Pri Primes in state:', priPrimesResponse);
+                
+                // Check if the response has a data property (common API response structure)
+                let priPrimesData = priPrimesResponse;
+                if (priPrimesResponse.data && Array.isArray(priPrimesResponse.data)) {
+                    console.log('📊 Found data property in response, using priPrimesResponse.data');
+                    priPrimesData = priPrimesResponse.data;
+                } else if (Array.isArray(priPrimesResponse)) {
+                    console.log('📊 Response is already an array, using directly');
+                    priPrimesData = priPrimesResponse;
+                } else {
+                    console.log('⚠️ Unexpected response structure:', priPrimesResponse);
+                    console.log('⚠️ Response keys:', Object.keys(priPrimesResponse || {}));
+                }
+                
+                dispatch({ type: 'SET_PRI_PRIMES', payload: priPrimesData });
+                await saveReferentielToStorage(priPrimesData, '@referentiel_pri_primes');
                 syncResults.push('Pri Primes');
+                console.log('✅ Pri Primes saved to storage and state:', priPrimesData);
+            } else {
+                console.log('❌ Pri Primes response invalid or has error:', priPrimesResponse);
             }
 
             // Update last sync time
@@ -291,7 +335,11 @@ export const ReferentielProvider = ({ children }) => {
             case 'interventions':
                 return state.interventions;
             case 'priPrimes':
-                return state.priPrimes;
+            console.log('🔍 getReferentielData called for priPrimes');
+            console.log('🔍 Current state.priPrimes:', state.priPrimes);
+            console.log('🔍 Current state.priPrimes type:', typeof state.priPrimes);
+            console.log('🔍 Current state.priPrimes length:', state.priPrimes && Array.isArray(state.priPrimes) ? state.priPrimes.length : 'Not an array');
+            return state.priPrimes;
             default:
                 return null;
         }

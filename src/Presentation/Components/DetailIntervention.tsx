@@ -14,6 +14,8 @@ import screenNames from '../../Infrastructure/Navigation/navigationNames';
 import Loader from './loader';
 import { useIntervention } from '../../Infrastructure/Contexte/InterventionContext';
 import Geolocation from '@react-native-community/geolocation';
+import LocationVerifier from '../../Application/Services/checkLocationHZ';
+import { InterventionStateService } from '../../Application/Services/InterventionStateService';
 
 interface DetailInterventionProps {
     route: {
@@ -44,6 +46,14 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
     const {
         updateInterventionData
     } = useIntervention();
+
+    // Log when selectedDebutDateTime changes
+    useEffect(() => {
+        if (selectedDebutDateTime) {
+            console.log('📅 selectedDebutDateTime updated:', selectedDebutDateTime);
+            console.log('📅 Formatted selectedDebutDateTime:', selectedDebutDateTime.toLocaleString('fr-FR'));
+        }
+    }, [selectedDebutDateTime]);
     useEffect(() => {
         if (noInterventionParam != undefined && noInterventionParam != '') {
             setcompo('intervention')
@@ -76,8 +86,13 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                             // Create a filtered version of sectionData without __ prefix keys
                             const filteredSectionData = {};
                             Object.entries(sectionData).forEach(([key, value]) => {
-                                if (!key.startsWith('__')) {
+                                if (!key.startsWith('__') && key  != 'vingtquatre') {
                                     filteredSectionData[key] = value;
+                                }
+                                if (key  == 'vingtquatre') {
+    
+                                    
+                                    filteredSectionData['24H'] = value;
                                 }
                             });
                             // Check if section object has any non-empty values
@@ -136,8 +151,13 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                         // Create a filtered version of sectionData without __ prefix keys
                         const filteredSectionData = {};
                         Object.entries(sectionData).forEach(([key, value]) => {
-                            if (!key.startsWith('__')) {
+                            if (!key.startsWith('__') && key  != 'vingtquatre') {
                                 filteredSectionData[key] = value;
+                            }
+                            if (key  == 'vingtquatre') {
+
+                                
+                                filteredSectionData['24H'] = value;
                             }
                         });
                         // Check if section object has any non-empty values
@@ -196,10 +216,24 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
     const renderParameter = (key, value) => {
         if (!isDisplayableValue(value)) return null;
 
+        const isPhoneField = key.toLowerCase().startsWith('tel');
+        const phoneNumber = isPhoneField ? formatFieldValue(value) : null;
+
         return (
             <View key={key} style={styles.infoRow}>
                 <Text style={styles.infoLabel}>{formatFieldName(key)} : </Text>
                 <Text style={styles.infoValue}>{formatFieldValue(value)}</Text>
+                {isPhoneField && phoneNumber && (
+                    <TouchableOpacity 
+                        style={styles.phoneIconContainer}
+                        onPress={() => Linking.openURL(`tel:${phoneNumber}`)}
+                    >
+                        <Image 
+                            source={require('../../../assets/Icons/phone.png')} 
+                            style={styles.phoneIcon}
+                        />
+                    </TouchableOpacity>
+                )}
             </View>
         );
     };
@@ -233,9 +267,68 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         Linking.openURL("tel:0639883013"); // Replace with actual phone number
     };
     const [codeImmeubleAddresse, setcodeImmeubleAddress] = useState('')
-    const handleConfirmIntervention = (date: Date) => {
+    const handleConfirmIntervention = async (date: Date) => {
+        // Set the selected date and time from the modal
+        console.log(date, 'date');
+        
         setSelectedDebutDateTime(date);
         setModalDebutIntervention(false);
+        
+        console.log('📅 Selected date/time from modal:', date);
+        console.log('📅 Formatted date:', date.toLocaleString('fr-FR'));
+        console.log('📅 ISO string:', date.toISOString());
+        
+        try {
+            // Capture current location
+            const locationVerifier = new LocationVerifier();
+            const currentLocation = await locationVerifier.getCurrentLocation();
+            
+            // Get building information
+            const buildingLat = parseFloat(latitude);
+            const buildingLon = parseFloat(longitude);
+            let isAtBuilding = false;
+            
+            if (buildingLat && buildingLon) {
+                // Add building to location verifier
+                locationVerifier.addBuilding(
+                    'current_building',
+                    {
+                        latitude: buildingLat,
+                        longitude: buildingLon
+                    },
+                    infoInter?.header?.title || 'Building',
+                    100 // 100 meter threshold (same as existing logic)
+                );
+                
+                // Check if user is at the building
+                isAtBuilding = locationVerifier.isAtBuilding('current_building', currentLocation) || false;
+            }
+            
+            // Store date/time and location in intervention state
+            await InterventionStateService.startIntervention(
+                infoInter?.header?.noIntervention || '',
+                infoInter?.header?.title || '',
+                date,
+                date.toLocaleString('fr-FR'), // Pass the selected date/time from modal
+                isAtBuilding ? (currentLocation as any).latitude : undefined,
+                isAtBuilding ? (currentLocation as any).longitude : undefined,
+                !isAtBuilding ? (currentLocation as any).latitude : undefined,
+                !isAtBuilding ? (currentLocation as any).longitude : undefined
+            );
+            
+            console.log('📍 Intervention started with location data:', {
+                selectedDateTime: date,
+                selectedDebutDateTime: selectedDebutDateTime,
+                location: currentLocation,
+                isAtBuilding,
+                buildingInfo: { latitude: buildingLat, longitude: buildingLon }
+            });
+            
+        } catch (error) {
+            console.error('❌ Error capturing location:', error);
+            // Continue with intervention start even if location capture fails
+        }
+        
         // Navigate to FormulaireInterventionScreen with the start date/time
         navigate(screenNames.FormulaireInterventionScreen, {
             noIntervention: infoInter?.header?.noIntervention,
@@ -261,16 +354,30 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         return d;
     }
     async function showModalDebutIntervention() {
-        Geolocation.getCurrentPosition(
-            async position => {
-                const deviceLat = position.coords.latitude;
-                const deviceLon = position.coords.longitude;
-                const immeubleLat = parseFloat(latitude);
-                const immeubleLon = parseFloat(longitude);
-
-                const distance = getDistanceFromLatLonInMeters(deviceLat, deviceLon, immeubleLat, immeubleLon);
-
-                if (distance > 100) { // 100 meters threshold
+        try {
+            // Use LocationVerifier for consistent location checking
+            const locationVerifier = new LocationVerifier();
+            const currentLocation = await locationVerifier.getCurrentLocation();
+            
+            const immeubleLat = parseFloat(latitude);
+            const immeubleLon = parseFloat(longitude);
+            
+            if (immeubleLat && immeubleLon) {
+                // Add building to location verifier
+                locationVerifier.addBuilding(
+                    'current_building',
+                    {
+                        latitude: immeubleLat,
+                        longitude: immeubleLon
+                    },
+                    infoInter?.header?.title || 'Building',
+                    100 // 100 meter threshold
+                );
+                
+                // Check if user is at the building
+                const isAtBuilding = locationVerifier.isAtBuilding('current_building', currentLocation);
+                
+                if (!isAtBuilding) {
                     Alert.alert(
                         "Hors zone",
                         `Votre position ne correspond pas à l'immeuble de l'intervention. \nSouhaitez-vous continuer ?`,
@@ -282,15 +389,18 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                 } else {
                     setModalDebutIntervention(true);
                 }
+            } else {
+                // If no building coordinates, show modal directly
+                setModalDebutIntervention(true);
+            }
 
-                await AsyncStorage.setItem('@addressImmeuble', infoInter?.header.title + ';' + infoInter?.header.address);
-                await AsyncStorage.setItem('@noIntervention', infoInter?.header.noIntervention.toString());
-            },
-            error => {
-                Alert.alert('Erreur', 'Impossible de récupérer la position de l\'appareil.');
-            },
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
-        );
+            await AsyncStorage.setItem('@addressImmeuble', infoInter?.header.title + ';' + infoInter?.header.address);
+            await AsyncStorage.setItem('@noIntervention', infoInter?.header.noIntervention.toString());
+            
+        } catch (error) {
+            console.error('❌ Error checking location:', error);
+            Alert.alert('Erreur', 'Impossible de récupérer la position de l\'appareil.');
+        }
     }
 
     return (
@@ -305,6 +415,11 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                         {compo === 'intervention' && <View style={styles.header}>
                             <Text style={styles.headerTitle}>{infoInter?.header.title}</Text>
                             <Text style={styles.addressText}>{infoInter?.header.address}</Text>
+                            {selectedDebutDateTime && (
+                                <Text style={styles.selectedDateTimeText}>
+                                    📅 Début sélectionné: {selectedDebutDateTime.toLocaleString('fr-FR')}
+                                </Text>
+                            )}
                         </View>}
                         {/* Sections */}
                         {infoInter?.sections.map((section, index) => renderSection(section, index))}
@@ -389,6 +504,13 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 4,
     },
+    selectedDateTimeText: {
+        fontSize: 14,
+        marginTop: 8,
+        color: '#1976d2',
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
     section: {
         marginVertical: 10,
         paddingHorizontal: 2,
@@ -404,24 +526,31 @@ const styles = StyleSheet.create({
         marginVertical: 1,
         alignItems: 'center',
         flexWrap: 'wrap',
+        justifyContent: 'space-between',
     },
     infoLabel: {
         fontWeight: 'bold',
         marginRight: 5,
+        flex: 0,
     },
     infoValue: {
         flex: 1,
+        marginRight: 8,
     },
     phoneIconContainer: {
-        width: 24,
-        height: 24,
+        width: 32,
+        height: 32,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#e3f2fd',
+        transform: [{ rotate: '240deg' }],
+        borderRadius: 16,
+        marginRight: 30,
     },
     phoneIcon: {
-        width: 20,
-        height: 20,
-        tintColor: '#3b5998',
+        width: 18,
+        height: 18,
+        tintColor: '#1976d2',
     },
     footer: {
         flexDirection: 'row',

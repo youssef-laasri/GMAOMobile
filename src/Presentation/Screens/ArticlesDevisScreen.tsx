@@ -154,7 +154,7 @@ const ArticlesDevisScreen = ({ navigation }) => {
         const article = {
             codeArticle: item.codeArticle,
             description: item.designation,
-            quantity: 1,
+            quantite: 1,
             unitPrice: item.totalHt,
             total: 0
         }

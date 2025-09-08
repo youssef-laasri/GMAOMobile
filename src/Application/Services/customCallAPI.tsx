@@ -1,7 +1,7 @@
-import { View, Text, Alert } from 'react-native'
-import React from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ArticleDevis } from '../ApiCalls';
+import { CompteurInfo, OperationDetail } from '../ApiCalls/generated/models';
+import { ArticleDevis } from '../ApiCalls/generated/models';
+import { Alert } from 'react-native';
 
 export interface fileModel {
     uri: string,
@@ -76,12 +76,12 @@ export const customCallAPI = {
             // Get token from storage
             const token = await AsyncStorage.getItem('@token');
             if (!token) {
-              throw new Error('Authentication token not found');
+                throw new Error('Authentication token not found');
             }
             
             // Create form data
             const formData = new FormData();
-            
+
             // Helper function to append data to form safely
             const appendToForm = (key, value) => {
               if (value !== undefined && value !== null) {
@@ -152,22 +152,31 @@ export const customCallAPI = {
             appendToForm('devisAvantTravaux.flagEmail', devisAvantTravauxFlagEmail);
             appendFile('devisAvantTravaux.signature', devisAvantTravauxSignature);
             
-            // Handle complex object: devisAvantTravauxListArticle
-            if (devisAvantTravauxListArticle && Array.isArray(devisAvantTravauxListArticle)) {
-              // The API spec shows this should be an array of ArticleDevis objects
-              // We need to append each property of each object with proper indexing
-              devisAvantTravauxListArticle.forEach((article, index) => {
-                if (article) {
-                  Object.keys(article).forEach(key => {
-                    const value = article[key];
-                    if (value !== undefined && value !== null) {
-                      formData.append(`devisAvantTravaux.listArticle[${index}].${key}`, value.toString());
-                    }
-                  });
-                }
-              });
-            }
-            
+             // Handle complex object: devisAvantTravauxListArticle
+             if (devisAvantTravauxListArticle && Array.isArray(devisAvantTravauxListArticle)) {
+               // The API spec shows this should be an array of ArticleDevis objects
+               // We need to append each property of each object with proper indexing
+
+               formData.append(`devisAvantTravaux.listArticle`, JSON.stringify(devisAvantTravauxListArticle));
+               // devisAvantTravauxListArticle.forEach((article, index) => {
+               //   if (article) {
+               //     Object.keys(article).forEach(key => {
+               //       const value = article[key];
+               //       if (value !== undefined && value !== null) {
+               //         formData.append(`devisAvantTravaux.listArticle[${index}].${key}`, value.toString());
+               //       }
+               //     });
+               //   }
+               // });
+             }
+
+             // Add compteurInfo as empty array
+             formData.append('compteurInfo', JSON.stringify([]));
+             
+             // Add operationDetails as empty array
+             formData.append('operationDetails', JSON.stringify([]));
+
+
             // Append report vocal text
             appendToForm('rapportVocal.speechToText', rapportVocalSpeechToText);
             
@@ -282,7 +291,7 @@ export const customCallAPI = {
             }
             
             throw error;
-          }
+        }
     },
 
 

@@ -5,7 +5,7 @@ import RNFS from 'react-native-fs';
 export const CommonFunction = {
 
     // Function to save signature to file
-    saveSignature: async (signature) => {
+    saveSignature: async (signature, name) => {
         if (!signature) {
             console.log(signature);
             
@@ -18,7 +18,7 @@ export const CommonFunction = {
             const base64Data = signature.replace('data:image/png;base64,', '');
 
             // Define file path where signature will be saved
-            const filePath = `file://${RNFS.CachesDirectoryPath}/signature.png`;
+            const filePath = `file://${RNFS.CachesDirectoryPath}/${name}`;
 
             // Write the base64 data to a file
             await RNFS.writeFile(filePath, base64Data, 'base64');

@@ -15,66 +15,6 @@ import Header from '../Components/Header';
 import { Picker } from '@react-native-picker/picker';
 import { useIntervention } from '../../Infrastructure/Contexte/InterventionContext';
 
-// Mock data based on the provided JSON structure
-const MOCK_DATA = {
-    localisations: [
-        {
-            nameLocalisation: "SOUS STATION CPCU",
-            statutLib: "Reporté",
-            equipement: []
-        },
-        {
-            nameLocalisation: "TERRASSE",
-            statutLib: "Reporté",
-            equipement: []
-        },
-        {
-            nameLocalisation: "CUISINE",
-            statutLib: "Reporté",
-            equipement: []
-        },
-        {
-            nameLocalisation: "CHAMBRES",
-            statutLib: "Reporté",
-            equipement: [
-                {
-                    nameEquipement: "ENTRETIEN DES VENTILO CONVECTEURS",
-                    statutLib: "Non traité",
-                    composants: []
-                },
-                {
-                    nameEquipement: "THERMOSTATS",
-                    statutLib: "Non traité",
-                    composants: [
-                        {
-                            nomComposant: "TOUS LES COMPOSANTS",
-                            frequence: "H",
-                            statutLib: "Non tr.",
-                            controles: [
-                                {
-                                    nomControle: "Général",
-                                    moyen: "Visuel et appareil de mesure",
-                                    anomalie: "Anomalie",
-                                    operation: "Correction du problème/demande de devis",
-                                    frequence: "H",
-                                    statutLib: "Non trai.."
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    nameEquipement: "VMC",
-                    statutLib: "Non traité",
-                    composants: []
-                }
-            ]
-        }
-    ]
-};
-
-
-
 
 // Validation Button Component
 const ValidateButton = ({ onPress }) => {
@@ -164,7 +104,7 @@ const LocalisationsScreen = ({ navigation }) => {
         );
 
         return (
-            <>
+            <SafeAreaView>
                 <Header titleCom="Localisations" />
                 <FlatList
                     data={interventionDetail?.__prestation[0].localisations}
@@ -173,7 +113,7 @@ const LocalisationsScreen = ({ navigation }) => {
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
                 />
                 <ValidateButton onPress={() => console.log('Validate Localisations')} />
-            </>
+            </SafeAreaView>
         );
     };
     const [selectedValue, setSelectedValue] = useState("");
@@ -218,7 +158,7 @@ const LocalisationsScreen = ({ navigation }) => {
         );
 
         return (
-            <>
+            <SafeAreaView>
                 <Header
                     titleCom="Equipements"
                 //   onBack={handleBack}
@@ -232,7 +172,7 @@ const LocalisationsScreen = ({ navigation }) => {
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
                 />
                 <ValidateButton onPress={() => console.log('Validate Equipements')} />
-            </>
+            </SafeAreaView>
         );
     };
 
@@ -327,7 +267,7 @@ const LocalisationsScreen = ({ navigation }) => {
         );
 
         return (
-            <>
+            <SafeAreaView>
                 <Header
                     titleCom="Contrôles"
                 //   onBack={handleBack}
@@ -341,7 +281,7 @@ const LocalisationsScreen = ({ navigation }) => {
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
                 />
                 <ValidateButton onPress={() => console.log('Validate Controles')} />
-            </>
+            </SafeAreaView>
         );
     };
 

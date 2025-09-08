@@ -1,11 +1,13 @@
-import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import Header from '../Components/Header';
 import { FlatList, TextInput } from 'react-native-gesture-handler';
 import { apiService } from '../../Application/Services/apiServices';
-import { DrapeauxOutpuDTO, DrapeauxOutput } from '../../Application/ApiCalls';
+import { DrapeauxOutput } from '../../Application/ApiCalls/generated/models';
 import Loader from '../Components/loader';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { InterventionApi, Configuration, DeleteDrapeauxInput } from '../../Application/ApiCalls/generated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DrapeauxScreen() {
   const [title, setText] = useState('DRAPEAUX');
@@ -14,6 +16,9 @@ export default function DrapeauxScreen() {
 
   const [data, setData] = useState<DrapeauxOutput[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
 
   useEffect(() => {
@@ -44,20 +49,136 @@ export default function DrapeauxScreen() {
     );
   });
 
-  const renderItem = ({ item }) => (
-    <View style={styles.item}>
+  const handleDeleteModeToggle = () => {
+    setIsDeleteMode(!isDeleteMode);
+    setSelectedItems(new Set());
+  };
+
+  const handleItemSelect = (itemId: string) => {
+    const newSelectedItems = new Set(selectedItems);
+    if (newSelectedItems.has(itemId)) {
+      newSelectedItems.delete(itemId);
+    } else {
+      newSelectedItems.add(itemId);
+    }
+    setSelectedItems(newSelectedItems);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedItems.size === 0) {
+      Alert.alert('Aucune sélection', 'Veuillez sélectionner au moins un élément à supprimer.');
+      return;
+    }
+
+    Alert.alert(
+      'Confirmer la suppression',
+      `Êtes-vous sûr de vouloir supprimer ${selectedItems.size} élément(s) sélectionné(s) ?`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: confirmDelete,
+        },
+      ]
+    );
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const token = await AsyncStorage.getItem('@token');
+      if (!token) {
+        Alert.alert('Erreur', 'Token d\'authentification non trouvé.');
+        return;
+      }
+
+      // Use the same base URL as in apiServices
+      const BASE_URL = "https://gmao.groupe-dt.fr/";
+      const interventionApi = new InterventionApi(new Configuration({
+        basePath: BASE_URL,
+      }));
+
+      console.log('🗑️ Starting deletion of items:', Array.from(selectedItems));
+      console.log('🔑 Using token:', token ? 'Present' : 'Missing');
+      console.log('🌐 Base URL:', BASE_URL);
+      
+      // Create the delete input with all selected items
+      const deleteInput: DeleteDrapeauxInput = {
+        noIntervention: Array.from(selectedItems)
+      };
+      
+      console.log('📦 Delete input:', deleteInput);
+      
+      // Make a single API call to delete all selected items
+      const result = await interventionApi.apiInterventionDeleteDrapeauPost({
+        token: token,
+        deleteDrapeauxInput: deleteInput,
+      });
+      
+      console.log('✅ Delete result:', result);
+      
+      // Remove deleted items from local state
+      setData(prevData => prevData.filter(item => !selectedItems.has(item.noIntervention as string)));
+      
+      // Reset selection and exit delete mode
+      setSelectedItems(new Set());
+      setIsDeleteMode(false);
+      
+      Alert.alert('Succès', `${selectedItems.size} élément(s) supprimé(s) avec succès.`);
+    } catch (error: any) {
+      console.error('❌ Error deleting items:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Une erreur est survenue lors de la suppression.';
+      
+      if (error.message) {
+        errorMessage = `Erreur: ${error.message}`;
+      } else if (error.status) {
+        errorMessage = `Erreur HTTP ${error.status}: ${error.statusText || 'Erreur de communication'}`;
+      }
+      
+      Alert.alert('Erreur', errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const renderItem = ({ item }: { item: DrapeauxOutput }) => (
+    <TouchableOpacity 
+      style={styles.item}
+      onPress={() => isDeleteMode ? handleItemSelect(item.noIntervention as string) : null}
+      disabled={!isDeleteMode}
+    >
       <View style={styles.itemContent}>
-        <Text style={styles.code}>{item.codeImmeuble}</Text>
-        <Text style={styles.description}>{item.designation}</Text>
-        <Text style={styles.date}>{item.dateRealise}</Text>
+        {isDeleteMode && (
+          <View style={styles.checkboxContainer}>
+            <View style={[
+              styles.checkbox,
+              selectedItems.has(item.noIntervention as string) && styles.checkboxSelected
+            ]}>
+              {selectedItems.has(item.noIntervention as string) && (
+                <Text style={styles.checkmark}>✓</Text>
+              )}
+            </View>
+          </View>
+        )}
+        <View style={styles.itemTextContainer}>
+          <Text style={styles.code}>{item.codeImmeuble}</Text>
+          <Text style={styles.description}>{item.designation}</Text>
+          <Text style={styles.date}>{item.dateRealise}</Text>
+        </View>
       </View>
       <View style={styles.separator} />
-    </View>
+    </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header titleCom={title} />
+      <Header titleCom={title} onDeleteModeToggle={handleDeleteModeToggle} />
       {loading && (<Loader />)}
 
       {/* Search Bar    */}
@@ -74,6 +195,19 @@ export default function DrapeauxScreen() {
           onChangeText={setSearchText}
         />
       </View>)}
+      {!loading && isDeleteMode && selectedItems.size > 0 && (
+        <View style={styles.deleteButtonContainer}>
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={handleDeleteSelected}
+            disabled={isDeleting}
+          >
+            <Text style={styles.deleteButtonText}>
+              {isDeleting ? 'Suppression...' : `Supprimer (${selectedItems.size})`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {!loading && (<FlatList
         data={filteredData}
         renderItem={renderItem}
@@ -120,6 +254,33 @@ const styles = StyleSheet.create({
   },
   itemContent: {
     padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkboxContainer: {
+    marginRight: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    borderRadius: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  itemTextContainer: {
+    flex: 1,
   },
   code: {
     fontSize: 18,
@@ -138,6 +299,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#DDD',
     marginLeft: 1,
+  },
+  deleteButtonContainer: {
+    padding: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DDD',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   navigation: {
     flexDirection: 'row',

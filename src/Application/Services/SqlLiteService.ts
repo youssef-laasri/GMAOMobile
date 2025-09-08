@@ -153,6 +153,7 @@ export const SqlLIteService = {
   },
 
   insertImmeuble: async (db: SQLiteDatabase, immeubleInfo) => {
+console.log(immeubleInfo, 'immeubleInfo');
 
     await db.executeSql(
       `INSERT INTO immeubles (
@@ -457,6 +458,8 @@ export const SqlLIteService = {
 
       if (result[0].rows.length > 0) {
         const lastRow = result[0].rows.item(0);
+        console.log(lastRow, 'lastRow');
+        
         return lastRow;
       }
       return null;

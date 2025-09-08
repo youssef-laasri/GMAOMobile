@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Platform, PermissionsAndroid, Modal, Keyboard, BackHandler, Dimensions } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Platform, PermissionsAndroid, Modal, Keyboard, BackHandler, Dimensions, TouchableWithoutFeedback } from 'react-native'
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../Components/Header'
 import { FlatList, Gesture, GestureDetector, GestureHandlerRootView, TextInput } from 'react-native-gesture-handler';
@@ -33,7 +33,7 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
     // Sample data based on the image
     const [data, setData] = useState<article[]>([]);
     const { cart, removeItem, updateQuantity, clearCart, cartTotal } = useCart();
-    
+
     // Get referentiel data from context
     const { getReferentielData, isOffline, lastSyncTime } = useReferentiel();
     const listModeRegelemnt = getReferentielData('modeReglement') || [];
@@ -138,17 +138,18 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
         // Prepare the data to pass back
         const devisData = {
             articles: data,
-            imageRapport: imageRapport,
+            imageRapportDevis: imageRapport,
             signataire: Signataire,
-            signature: signature,
+            signatureDevis: signature,
             modeReglement: paymentMode,
             image: image // Photo of the devis
         };
-        
+        console.log(devisData, 'devisData');
+
         // Pass the data back to the previous screen using goBack with params
         // navigation.goBack();
-                navigate(screenNames.FormulaireInterventionScreen)
-        
+        navigate(screenNames.FormulaireInterventionScreen, { devisData })
+
         // Use setTimeout to ensure the previous screen is ready to receive params
         setTimeout(() => {
             // Emit an event or use a callback to pass the data
@@ -200,7 +201,11 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
 
     // Handle signature save
     const handleSignature = (signature) => {
+        console.log(signature, 'signature canvas');
+
         setSignature(signature);
+        console.log(signature, 'signature');
+
     };
 
     // Handle image selection
@@ -244,7 +249,12 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
     const [quantite, setQuantite] = useState(0);
     const [visibleModal, setVisibleModal] = useState(false);
 
-
+    const [isDrawing, setIsDrawing] = useState(false); 
+    
+    const handleEnd = () => {
+        setIsDrawing(false)
+        signatureRef.current.readSignature();
+    };
     const requestCameraPermission = async () => {
         if (Platform.OS === "android") {
             try {
@@ -528,19 +538,22 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
 
                                         <Text style={styles.subLabel}>Signature :</Text>
                                         <View style={styles.signatureContainer}>
-
                                             {signatureEnabled ? (
-                                                <SignatureCanvas
-                                                    ref={signatureRef}
-                                                    onOK={handleSignature}
-                                                    onEmpty={() => setSignature(null)}
-                                                    descriptionText=""
-                                                    webStyle={`
+                                                <TouchableWithoutFeedback>
+                                                    <SignatureCanvas
+                                                        onBegin={() => setIsDrawing(true)}
+                                                        onEnd={handleEnd}
+                                                        ref={signatureRef}
+                                                        onOK={handleSignature}
+                                                        onEmpty={() => setSignature(null)}
+                                                        descriptionText=""
+                                                        webStyle={`
           .m-signature-pad {height: 150px; width: 100%;}
           .m-signature-pad--body {border: 1px solid #ccc;}
         `}
-                                                    style={styles.signatureCanvas}
-                                                />
+                                                        style={styles.signatureCanvas}
+                                                    />
+                                                </TouchableWithoutFeedback>
                                             ) : (
                                                 <View style={styles.disabledOverlay}>
                                                     <Text>Signature désactivée tant que le clavier est visible.</Text>

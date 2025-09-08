@@ -5,9 +5,8 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 import screenNames from '../../Infrastructure/Navigation/navigationNames';
 import { apiService } from '../../Application/Services/apiServices';
-import { InterventionPlanningDTO, PlanningDTOOutput } from '../../Application/ApiCalls';
+import { InterventionPlanningDTO, PlanningDTOOutput } from '../../Application/ApiCalls/generated';
 import Loader from '../Components/loader';
-import { rotationHandlerName } from 'react-native-gesture-handler/lib/typescript/handlers/RotationGestureHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const PlanningScreen = ({ navigation }) => {
@@ -47,7 +46,7 @@ const PlanningScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchDataPlanning()
-  })
+  },[notificationsItems, notificationsItemsEnAttente, notificationsHistoriqueItems])
 
 
   const updateTabCount = (tabId, newCount) => {
@@ -102,7 +101,7 @@ const PlanningScreen = ({ navigation }) => {
             </Text>
           </View>
         ) : (
-          <ScrollView >
+          <ScrollView style={styles.scrollViewStyle}>
             {activeTab === 'JOUR' && notificationsItems?.map(notification => renderNotification(notification))}
             {activeTab === 'EN_ATTENTE' && notificationsItemsEnAttente?.map(notification => renderNotification(notification))}
             {activeTab === 'HISTORIQUE' && notificationsHistoriqueItems?.map(notification => renderHistorique(notification))}
@@ -296,6 +295,12 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 13,
     // fontStyle: 'italic',
+  },
+  scrollViewStyle: {
+     marginBottom: '28%',
+    // flex: 1,
+    // height: '86%',
+    // borderWidth : 1,
   },
 })
 

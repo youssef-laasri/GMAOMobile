@@ -2,13 +2,13 @@ import { View, Text, Image, StyleSheet, ActivityIndicator, TouchableOpacity, Sta
 import React, { useEffect, useState } from 'react'
 import Header from '../Components/Header'
 import { FlatList, TextInput } from 'react-native-gesture-handler';
-import { apiService } from '../../Application/Services/apiServices';
 import { SqlLIteService } from '../../Application/Services/SqlLiteService';
 import Loader from '../Components/loader';
 import { ImmeubleDTO, ImmeubleInfoDTO } from '../../Application/ApiCalls';
 import { useNavigation } from '@react-navigation/native';
 import screenNames from '../../Infrastructure/Navigation/navigationNames';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiService } from '../../Application/Services/apiServices-enhanced';
 
 export default function AstreinteScreen() {
   const [title, setText] = useState('Immeubles');
@@ -34,6 +34,8 @@ export default function AstreinteScreen() {
       let checkImmeubleExist = await SqlLIteService.checkIfTableExists(db, 'immeubles')
       console.log(checkImmeubleExist);
       if (!checkImmeubleExist) {
+        console.log('gfjfkjhfljhfjfjkfkjfkjkjfjhfjhhf');
+        
         await SqlLIteService.createImmeubleTable(db);
         const getNbrOfImmeubles = await apiService.getImmeublesPagination(page, 1);
         while (hasMorePages) {
@@ -124,6 +126,10 @@ export default function AstreinteScreen() {
       if (checkImmeubleExist) {
         let NbrOfimm = await SqlLIteService.getNbrsOfImmeubles(db)
         console.log(NbrOfimm);
+        if(NbrOfimm == 0){
+          await SqlLIteService.deleteTable(db, 'immeubles');
+          fetchAndStoreImmeubles();
+        }
         if (NbrOfimm > 0) {
           try {
             const db = await SqlLIteService.getDBConnection();

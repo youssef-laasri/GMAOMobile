@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { stat } from 'react-native-fs';
 
 export interface InterventionState {
     isStarted: boolean;
     startTime: number; // timestamp
+    startDateTime?: Date; 
+    startDateTimeString? : string// actual date and time
     noIntervention: string;
     codeImmeuble: string;
     latitudeDebut?: number;
@@ -11,9 +14,62 @@ export interface InterventionState {
     longitudeDebutHZ?: number;
 }
 
+export interface InterventionFormData {
+    // Basic intervention data
+    noIntervention: string;
+    dateDebut: string;
+    dateFin: string;
+    latitudeDebut?: number;
+    longitudeDebut?: number;
+    latitudeFin?: number;
+    longitudeFin?: number;
+    latitudeDebutHZ?: number;
+    longitudeDebutHZ?: number;
+    latitudeFinHZ?: number;
+    longitudeFinHZ?: number;
+    
+    // Images
+    imageRapport: string[];
+    imagebeforeAfterIntervention: string[];
+    imagequoteRequest: string[];
+    
+    // Audio recordings
+    recordPath: string;
+    speechToText: string;
+    
+    // Form sections and state
+    step: string;
+    screen: string;
+    expandedSections: Record<string, any>;
+    
+    // Devis data
+    devisArticles: any[];
+    devisImages: string[];
+    devisSignataire: string;
+    devisSignature: any;
+    devisModeReglement: string;
+    devisImage: string | null;
+    
+    // Drawing data
+    drawingPaths: any[];
+    selectedColor: string;
+    selectedStrokeWidth: number;
+    
+    // Other form data
+    listQualification: any[];
+    listPrimeConventionelle: any[];
+    meters: any[];
+    
+    // Timestamps
+    lastSaved: number;
+    lastModified: number;
+}
+
 export class InterventionStateService {
     private static readonly INTERVENTION_STATE_KEY = '@intervention_state';
     private static readonly INTERVENTION_HISTORY_KEY = '@intervention_history';
+    private static readonly INTERVENTION_FORM_DATA_KEY = '@intervention_form_data';
+    private static readonly INTERVENTION_IMAGES_KEY = '@intervention_images';
 
     // Save intervention state
     static async saveInterventionState(state: InterventionState): Promise<void> {
@@ -37,10 +93,16 @@ export class InterventionStateService {
     }
 
     // Start intervention
-    static async startIntervention(noIntervention: string, codeImmeuble: string, latitude?: number, longitude?: number, latitudeHZ?: number, longitudeHZ?: number): Promise<void> {
+    static async startIntervention(noIntervention: string, codeImmeuble: string, startDateTime?: Date,
+        startDateTimeString?: string, latitude?: number, longitude?: number, latitudeHZ?: number, longitudeHZ?: number): Promise<void> {
+        const actualStartTime = startDateTime || new Date();
+        console.log(actualStartTime, 'actualStartTime', startDateTime);
+        
         const state: InterventionState = {
             isStarted: true,
-            startTime: Date.now(),
+            startTime: actualStartTime.getTime(), // Store timestamp
+            startDateTime: startDateTime, // Store actual date object
+            startDateTimeString: startDateTimeString, // Store actual date object
             noIntervention,
             codeImmeuble,
             latitudeDebut: latitude,
@@ -200,6 +262,12 @@ export class InterventionStateService {
         noIntervention: string;
         codeImmeuble: string;
         startTime: string;
+        startDate: string;
+        startDateTime: string;
+        latitudeDebut: number;
+        longitudeDebut: number;
+        latitudeDebutHZ: number;
+        longitudeDebutHZ: number;
     } | null> {
         const state = await this.getInterventionState();
         if (!state?.isStarted) {
@@ -207,18 +275,212 @@ export class InterventionStateService {
         }
 
         const duration = await this.getInterventionDuration();
-        const startDate = new Date(state.startTime);
+        // Use stored startDateTime if available, otherwise fallback to startTime timestamp
+        const startDate = state.startDateTime || new Date(state.startTime);
+console.log(state.startDateTime, 'state.startDateTime');
 
         return {
             isActive: true,
             duration: this.formatDuration(duration),
             noIntervention: state.noIntervention,
             codeImmeuble: state.codeImmeuble,
-            startTime: startDate.toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            }),
+            startTime: startDate.toLocaleString('fr-FR'),
+            startDate: startDate.toLocaleString('fr-FR'),
+            startDateTime: state.startDateTimeString || '',
+            latitudeDebut: state.latitudeDebut || 0,
+            longitudeDebut: state.longitudeDebut || 0,
+            latitudeDebutHZ: state.latitudeDebutHZ || 0,
+            longitudeDebutHZ: state.longitudeDebutHZ || 0
         };
+    }
+
+    // ===== FORM DATA PERSISTENCE METHODS =====
+
+    // Save form data for current intervention
+    static async saveFormData(formData: Partial<InterventionFormData>): Promise<void> {
+        try {
+            const currentData = await this.getFormData();
+            const updatedData = {
+                ...currentData,
+                ...formData,
+                lastModified: Date.now(),
+            } as InterventionFormData;
+            
+            await AsyncStorage.setItem(this.INTERVENTION_FORM_DATA_KEY, JSON.stringify(updatedData));
+            console.log('Form data saved:', updatedData);
+        } catch (error) {
+            console.error('Error saving form data:', error);
+        }
+    }
+
+    // Get saved form data
+    static async getFormData(): Promise<InterventionFormData | null> {
+        try {
+            const data = await AsyncStorage.getItem(this.INTERVENTION_FORM_DATA_KEY);
+            return data ? JSON.parse(data) : null;
+        } catch (error) {
+            console.error('Error getting form data:', error);
+            return null;
+        }
+    }
+
+    // Save images for current intervention
+    static async saveImages(images: {
+        imageRapport?: string[];
+        imagebeforeAfterIntervention?: string[];
+        imagequoteRequest?: string[];
+        devisImages?: string[];
+    }): Promise<void> {
+        try {
+            const currentImages = await this.getImages();
+            const updatedImages = {
+                ...currentImages,
+                ...images,
+                lastSaved: Date.now(),
+            };
+            
+            await AsyncStorage.setItem(this.INTERVENTION_IMAGES_KEY, JSON.stringify(updatedImages));
+            console.log('Images saved:', updatedImages);
+        } catch (error) {
+            console.error('Error saving images:', error);
+        }
+    }
+
+    // Get saved images
+    static async getImages(): Promise<{
+        imageRapport: string[];
+        imagebeforeAfterIntervention: string[];
+        imagequoteRequest: string[];
+        devisImages: string[];
+        lastSaved: number;
+    } | null> {
+        try {
+            const images = await AsyncStorage.getItem(this.INTERVENTION_IMAGES_KEY);
+            return images ? JSON.parse(images) : null;
+        } catch (error) {
+            console.error('Error getting images:', error);
+            return null;
+        }
+    }
+
+    // Save audio recording data
+    static async saveAudioData(audioData: {
+        recordPath?: string;
+        speechToText?: string;
+    }): Promise<void> {
+        try {
+            await this.saveFormData(audioData);
+            console.log('Audio data saved:', audioData);
+        } catch (error) {
+            console.error('Error saving audio data:', error);
+        }
+    }
+
+    // Save devis data
+    static async saveDevisData(devisData: {
+        devisArticles?: any[];
+        devisImages?: string[];
+        devisSignataire?: string;
+        devisSignature?: any;
+        devisModeReglement?: string;
+        devisImage?: string | null;
+    }): Promise<void> {
+        try {
+            await this.saveFormData(devisData);
+            console.log('Devis data saved:', devisData);
+        } catch (error) {
+            console.error('Error saving devis data:', error);
+        }
+    }
+
+    // Save drawing data
+    static async saveDrawingData(drawingData: {
+        drawingPaths?: any[];
+        selectedColor?: string;
+        selectedStrokeWidth?: number;
+    }): Promise<void> {
+        try {
+            await this.saveFormData(drawingData);
+            console.log('Drawing data saved:', drawingData);
+        } catch (error) {
+            console.error('Error saving drawing data:', error);
+        }
+    }
+
+    // Auto-save form data (call this periodically)
+    static async autoSaveFormData(formData: Partial<InterventionFormData>): Promise<void> {
+        try {
+            // Only auto-save if intervention is active
+            const isActive = await this.isInterventionActive();
+            if (isActive) {
+                await this.saveFormData(formData);
+                console.log('Auto-save completed');
+            }
+        } catch (error) {
+            console.error('Error in auto-save:', error);
+        }
+    }
+
+    // Restore all data for current intervention
+    static async restoreInterventionData(): Promise<{
+        formData: InterventionFormData | null;
+        images: any;
+    }> {
+        try {
+            const [formData, images] = await Promise.all([
+                this.getFormData(),
+                this.getImages()
+            ]);
+
+            console.log('Intervention data restored:', { formData, images });
+            return { formData, images };
+        } catch (error) {
+            console.error('Error restoring intervention data:', error);
+            return { formData: null, images: null };
+        }
+    }
+
+    // Clear all form data (when intervention ends)
+    static async clearFormData(): Promise<void> {
+        try {
+            await AsyncStorage.removeItem(this.INTERVENTION_FORM_DATA_KEY);
+            await AsyncStorage.removeItem(this.INTERVENTION_IMAGES_KEY);
+            console.log('Form data cleared');
+        } catch (error) {
+            console.error('Error clearing form data:', error);
+        }
+    }
+
+    // Check if there's unsaved data
+    static async hasUnsavedData(): Promise<boolean> {
+        try {
+            const formData = await this.getFormData();
+            const images = await this.getImages();
+            
+            if (!formData && !images) return false;
+            
+            // Check if there's meaningful data
+            const hasFormData = formData && (
+                formData.noIntervention ||
+                formData.imageRapport?.length > 0 ||
+                formData.imagebeforeAfterIntervention?.length > 0 ||
+                formData.imagequoteRequest?.length > 0 ||
+                formData.recordPath ||
+                formData.speechToText ||
+                formData.devisArticles?.length > 0
+            );
+            
+            const hasImages = images && (
+                images.imageRapport?.length > 0 ||
+                images.imagebeforeAfterIntervention?.length > 0 ||
+                images.imagequoteRequest?.length > 0 ||
+                images.devisImages?.length > 0
+            );
+            
+            return !!(hasFormData || hasImages);
+        } catch (error) {
+            console.error('Error checking unsaved data:', error);
+            return false;
+        }
     }
 }

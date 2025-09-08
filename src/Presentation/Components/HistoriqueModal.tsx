@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet, Modal, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, Image, StyleSheet, Modal, Alert, BackHandler } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import { FlatList, TextInput } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -116,6 +116,19 @@ const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseI
     // ];
     const [proposals, setProposals] = useState<HistoriqueDevis[]>([]);
     const [data, setData] = useState<Array<HistoriqueIntervention>>([]);
+
+    // Handle back button press
+    useEffect(() => {
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (visible) {
+                onClose();
+                return true; // Prevent default behavior
+            }
+            return false; // Allow default behavior
+        });
+
+        return () => backHandler.remove();
+    }, [visible, onClose]);
     const filteredData = data.filter(item => {
         const searchLower = searchText.toLowerCase();
         return (
@@ -251,9 +264,18 @@ const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseI
             visible={visible}
             transparent={true}
             animationType="slide"
+            onRequestClose={onClose}
         >
-            <SafeAreaView style={styles.modalContainer}>
-                <View style={styles.modalContent}>
+            <TouchableOpacity 
+                style={styles.modalContainer}
+                activeOpacity={1}
+                onPress={onClose}
+            >
+                <TouchableOpacity 
+                    style={styles.modalContent}
+                    activeOpacity={1}
+                    onPress={(e) => e.stopPropagation()}
+                >
                     <Text style={styles.modalTitle}>{titleModal}</Text>
 
                     <Text style={styles.addressTitle}>
@@ -297,8 +319,8 @@ const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseI
                     <TouchableOpacity style={styles.okButton} onPress={onClose}>
                         <Text style={styles.okButtonText}>OK</Text>
                     </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+                </TouchableOpacity>
+            </TouchableOpacity>
         </Modal>
     )
 }

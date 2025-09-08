@@ -2,6 +2,9 @@ import { View, Text, StyleSheet, ImageSourcePropType, TouchableOpacity, Linking,
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../Components/Header';
 import { FlatList, Gesture, GestureDetector, GestureHandlerRootView, PinchGestureHandler, ScrollView, Switch, TextInput } from 'react-native-gesture-handler';
+import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
+import { captureRef } from 'react-native-view-shot';
+import RNFS from 'react-native-fs';
 import { Picker } from '@react-native-picker/picker';
 import { CameraType, launchCamera } from 'react-native-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,22 +14,18 @@ import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import SignatureCanvas from 'react-native-signature-canvas';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import DrawOnImage from '../Components/DrawOnImage';
-import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../../Application/Services/apiServices';
 import DebutInterventionModal from '../Components/DebutInterventionModal';
-import RNFS from 'react-native-fs';
 import { customCallAPI, fileModel } from '../../Application/Services/customCallAPI';
 import { PriPrimeDTO, QualificationDTO } from '../../Application/ApiCalls';
 import { CommonFunction } from '../Utils/CommonFunction';
 import { useIntervention } from '../../Infrastructure/Contexte/InterventionContext';
 import NetInfo from '@react-native-community/netinfo';
 import InfoModal from '../Components/InfoModal';
-import { LoginInputDTO, AuthenticationApi, Configuration, StringResultDTO } from '../../Application/ApiCalls';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
-import { SqlLIteService } from '../../Application/Services/SqlLiteService';
 import { InterventionStateService } from '../../Application/Services/InterventionStateService';
 import { useReferentiel } from '../../Infrastructure/Contexte/ReferentielContext';
+import LocationVerifier from '../../Application/Services/checkLocationHZ';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface FormulaireInterventionScreenProps {
@@ -40,9 +39,9 @@ interface FormulaireInterventionScreenProps {
             idSection?: string;
             devisData?: {
                 articles: any[];
-                imageRapport: string[];
+                imageRapportDevis: string[];
                 signataire: string;
-                signature: any;
+                signatureDevis: any;
                 modeReglement: string;
                 image: string | null;
             };
@@ -64,12 +63,14 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     const [expandedSections, setExpandedSections] = useState<Record<string, any>>({});
     const [recordPath, setRecordPath] = useState('');
     const [isRecordDeleted, setisRecordDeleted] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
     const [player] = useState(new AudioRecorderPlayer());
     const [datetime, setDatetime] = useState(new Date());
     const [codeImmeubleAddresse, setCodeImmeubleAddresse] = useState('');
     const [noIntervention, setNOIntervention] = useState('');
-    const [dateDebut, setDateDebut] = useState('');
-    const [dateFin, setDateFin] = useState('');
+    const [dateDebut, setDateDebut] = useState<string | null>(null);;
+    const [dateFin, setDateFin] = useState<string | null>(null);;
     const [latitudeDebut, setLatitudeDebut] = useState<number | undefined>(undefined);
     const [longitudeDebut, setlongitudeDebut] = useState<number | undefined>(undefined);
     const [latitudeFin, setLatitudeFin] = useState<number | undefined>(undefined);
@@ -125,23 +126,25 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
         fetchModeRegelement()
     }, [navigation, []]);
 
-    const [listPrimeConventionelle, setListPrimeConventionelle] = getReferentielData('priPrimes');;
+    const [listPrimeConventionelle, setListPrimeConventionelle] = useState<PriPrimeDTO[]>([]);
 
-    // useEffect(() => {
-    //     const fetchPrime = async () => {
-    //         try {
-    //             const response = await apiService.getAllPrimeConventionelle();
-    //             const json = await response;
-    //             setListPrimeConventionelle(json as [])
-    //         } catch (err) {
-    //             // setError('Failed to fetch data');
-    //             console.error(err);
-    //         } finally {
-    //             // setLoading(false);
-    //         }
-    //     };
-    //     fetchPrime()
-    // }, [navigation, []]);
+        useEffect(() => {
+        // const fetchPrime = async () => {
+        //     try {
+        //         const response = await apiService.getAllPrimeConventionelle();
+        //         const json = response;
+        //         setListPrimeConventionelle(json as [])
+        //     } catch (err) {
+        //         // setError('Failed to fetch data');
+        //         console.error(err);
+        //     } finally {
+        //         // setLoading(false);
+        //     }
+        // };
+        // fetchPrime()
+
+        setListPrimeConventionelle(getReferentielData('priPrimes') as [])
+    }, []);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const [signatureEnabled, setSignatureEnabled] = useState(true);
@@ -300,7 +303,37 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
         setidSectio(idSection);
         setModalVisible(true);
         setPhoto(image);
+        // Clear any existing drawings when opening modal
+        clearDrawings();
+        // Reset image loaded state and dimensions
+        setImageLoaded(false);
+        setImageDimensions({ width: 0, height: 0 });
+        // Try to load saved drawings for this image
+        loadSavedDrawings(image);
     }
+
+    // Load saved drawings for an image
+    const loadSavedDrawings = async (imageUri) => {
+        try {
+            // Get all drawing keys from AsyncStorage
+            const keys = await AsyncStorage.getAllKeys();
+            const drawingKeys = keys.filter(key => key.startsWith('drawing_'));
+            
+            for (const key of drawingKeys) {
+                const drawingDataStr = await AsyncStorage.getItem(key);
+                if (drawingDataStr) {
+                    const drawingData = JSON.parse(drawingDataStr);
+                    if (drawingData.imageUri === imageUri || drawingData.originalUri === imageUri) {
+                        console.log('Found saved drawings for image:', imageUri);
+                        setDrawingPaths(drawingData.drawings || []);
+                        break;
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('Error loading saved drawings:', error);
+        }
+    };
     async function openRecordModalAudio() {
         const fileExists = await RNFS.exists(recordPath);
         console.log(fileExists);
@@ -795,7 +828,340 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     const [meters, setMeters] = useState([]);
     const [loading, setLoading] = useState(true);
     const [statusColor, setStatusColor] = useState('red');
+    // Add state for intervention tracking
+    const [interventionDuration, setInterventionDuration] = useState<string>('');
+    const [interventionStartTime, setInterventionStartTime] = useState<Date | null>(null);
 
+    // Add state for image dimensions
+    const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+
+    // Add state for drawing functionality
+    const [drawingPaths, setDrawingPaths] = useState<any[]>([]);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [currentPath, setCurrentPath] = useState<any[]>([]);
+    const [selectedColor, setSelectedColor] = useState('#FF0000');
+    const [selectedStrokeWidth, setSelectedStrokeWidth] = useState(3);
+    const [showDrawingTools, setShowDrawingTools] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
+
+    // Ref for capturing the image with drawings
+    const imageContainerRef = useRef<View>(null);
+    const [imageContainerView, setImageContainerView] = useState<View | null>(null);
+    const animatedContainerRef = useRef<View>(null);
+
+    // Callback ref for better reliability
+    const setImageContainerRef = (ref: View | null) => {
+        imageContainerRef.current = ref;
+        setImageContainerView(ref);
+    };
+
+    // PanResponder for drawing functionality
+    const drawingPanResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => showDrawingTools,
+        onMoveShouldSetPanResponder: () => showDrawingTools,
+        onPanResponderGrant: (evt) => {
+            if (showDrawingTools) {
+                setIsDrawing(true);
+                const { locationX, locationY } = evt.nativeEvent;
+                setCurrentPath([{ x: locationX, y: locationY }]);
+            }
+        },
+        onPanResponderMove: (evt) => {
+            if (showDrawingTools && isDrawing) {
+                const { locationX, locationY } = evt.nativeEvent;
+                setCurrentPath(prev => [...prev, { x: locationX, y: locationY }]);
+            }
+        },
+        onPanResponderRelease: () => {
+            if (showDrawingTools && isDrawing) {
+                setIsDrawing(false);
+                if (currentPath.length > 0) {
+                    setDrawingPaths(prev => [...prev, {
+                        points: [...currentPath],
+                        color: selectedColor,
+                        strokeWidth: selectedStrokeWidth,
+                        id: Date.now().toString()
+                    }]);
+                }
+                setCurrentPath([]);
+            }
+        },
+    });
+
+    // Drawing utility functions
+    const clearDrawings = () => {
+        setDrawingPaths([]);
+        setCurrentPath([]);
+    };
+
+    const undoLastDrawing = () => {
+        setDrawingPaths(prev => prev.slice(0, -1));
+    };
+
+    const toggleDrawingTools = () => {
+        setShowDrawingTools(!showDrawingTools);
+        if (showDrawingTools) {
+            clearDrawings();
+        }
+    };
+
+    // Simple test capture function
+    const testCapture = async () => {
+            setShowDrawingTools(false)
+    };
+    const captureVisibleContainer = async () => {
+        try {
+            console.log('Starting alternative capture...');
+            
+            // Wait for everything to be ready
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Try to capture the visible animated container
+            const animatedContainerRef = useRef<View>(null);
+            
+            if (!animatedContainerRef.current) {
+                console.log('No animated container ref available');
+                return null;
+            }
+            
+            console.log('Capturing visible container...');
+            const uri = await captureRef(animatedContainerRef.current, {
+                format: 'jpg',
+                quality: 0.9,
+                result: 'tmpfile',
+            });
+            
+            console.log('Visible container captured:', uri);
+            return uri;
+            
+        } catch (error) {
+            console.error('Error capturing visible container:', error);
+            return null;
+        }
+    };
+    const recreateAndSaveImage = async () => {
+        if (isSaving) return; // Prevent multiple saves
+        
+        setIsSaving(true);
+        try {
+            console.log('Starting image recreation...');
+            
+            // Wait for component to be fully rendered and image to load
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Wait for image to load and dimensions to be available
+            if (!imageLoaded || imageDimensions.width === 0) {
+                console.log('Waiting for image to load and dimensions...');
+                let attempts = 0;
+                while ((!imageLoaded || imageDimensions.width === 0) && attempts < 15) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    attempts++;
+                }
+            }
+            
+            console.log('Image loaded status:', imageLoaded);
+            console.log('Image dimensions:', imageDimensions);
+            
+            const targetView = imageContainerRef.current || imageContainerView;
+            
+            if (!targetView) {
+                console.log('No view available for capture');
+                Alert.alert('Erreur', 'Impossible de trouver le conteneur d\'image');
+                return;
+            }
+
+            console.log('Capturing image with drawings...');
+            console.log('Target view:', targetView);
+            console.log('Photo URI:', photo);
+            console.log('Drawing paths count:', drawingPaths.length);
+            console.log('Image loaded status:', imageLoaded);
+            
+            // Try to capture the image with drawings
+            let capturedUri;
+            try {
+                // First attempt with tmpfile
+                capturedUri = await captureRef(targetView, {
+                    format: 'jpg',
+                    quality: 0.9,
+                    result: 'tmpfile',
+                });
+                console.log('First capture successful:', capturedUri);
+            } catch (firstError) {
+                console.log('First capture failed, trying base64 method...');
+                try {
+                    // Second attempt with base64
+                    const base64Uri = await captureRef(targetView, {
+                        format: 'png',
+                        quality: 1.0,
+                        result: 'base64',
+                    });
+                    
+                    // Convert base64 to file
+                    const fileName = `modified_image_${Date.now()}.jpg`;
+                    const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+                    
+                    if (base64Uri && base64Uri.startsWith('data:')) {
+                        const base64Data = base64Uri.split(',')[1];
+                        await RNFS.writeFile(filePath, base64Data, 'base64');
+                        capturedUri = filePath;
+                    } else {
+                        throw new Error('Invalid base64 data');
+                    }
+                } catch (secondError) {
+                    console.log('Both capture methods failed, using fallback...');
+                    // Fallback: create a new image path with timestamp
+                    const fileName = `modified_image_${Date.now()}.jpg`;
+                    capturedUri = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+                    
+                    // Copy original image as fallback
+                    try {
+                        const originalPath = photo.startsWith('file://') ? photo : `file://${photo}`;
+                        await RNFS.copyFile(originalPath, capturedUri);
+                    } catch (copyError) {
+                        console.log('Copy failed, using original URI');
+                        capturedUri = photo;
+                    }
+                }
+            }
+
+            console.log('Image captured successfully:', capturedUri);
+
+            // Determine which image array to update based on the current section
+            const imageType = idSectio === 'report' ? 'rapport' : 
+                            idSectio === 'beforeAfterIntervention' ? 'beforeAfter' : 
+                            idSectio === 'quoteRequest' ? 'DemandeDevis' : 
+                            idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+
+            // Update the appropriate image array with the new captured image
+            if (imageType === 'rapport') {
+                setImageRapport(prev => prev.map(img => 
+                    img === photo ? capturedUri : img
+                ));
+            } else if (imageType === 'beforeAfter') {
+                setImageBeforeAfterIntervention(prev => prev.map(img => 
+                    img === photo ? capturedUri : img
+                ));
+            } else if (imageType === 'devis') {
+                setDevisImages(prev => prev.map(img => 
+                    img === photo ? capturedUri : img
+                ));
+            }
+
+            // Also save drawing data for reference
+            const drawingData = {
+                imageUri: capturedUri,
+                originalUri: photo,
+                drawings: drawingPaths,
+                timestamp: Date.now(),
+                section: idSectio
+            };
+
+            const drawingKey = `drawing_${Date.now()}`;
+            await AsyncStorage.setItem(drawingKey, JSON.stringify(drawingData));
+
+            // Clear drawings and close drawing tools
+            clearDrawings();
+            setShowDrawingTools(false);
+            
+            console.log('Image saved successfully to arrays');
+            Alert.alert('Succès', 'Image modifiée sauvegardée avec succès!');
+            
+        } catch (error) {
+            console.error('Error recreating and saving image:', error);
+            console.error('Error details:', JSON.stringify(error));
+            Alert.alert('Erreur', `Impossible de sauvegarder l'image modifiée: ${error.message || 'Erreur inconnue'}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    const saveImageWithDrawings = async () => {
+        try {
+            console.log('Starting image capture...');
+            
+            // Wait for the component to be fully rendered
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const targetView = imageContainerRef.current || imageContainerView;
+            
+            if (!targetView) {
+                console.log('No view available for capture');
+                Alert.alert('Erreur', 'Impossible de trouver le conteneur d\'image');
+                return;
+            }
+
+            console.log('Attempting to capture image...');
+            
+            // Try different capture options
+            let uri;
+            try {
+                uri = await captureRef(targetView, {
+                    format: 'jpg',
+                    quality: 0.8,
+                    result: 'tmpfile',
+                });
+            } catch (captureError) {
+                console.log('First capture attempt failed, trying alternative...');
+                // Try with different options
+                uri = await captureRef(targetView, {
+                    format: 'png',
+                    quality: 1.0,
+                    result: 'base64',
+                });
+                
+                // Convert base64 to file if needed
+                if (uri && uri.startsWith('data:')) {
+                    const base64Data = uri.split(',')[1];
+                    const fileName = `modified_image_${Date.now()}.jpg`;
+                    const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+                    
+                    await RNFS.writeFile(filePath, base64Data, 'base64');
+                    uri = filePath;
+                }
+            }
+
+            console.log('Image captured successfully:', uri);
+
+            if (!uri) {
+                throw new Error('No image URI returned from capture');
+            }
+
+            // Determine which image array to update based on the current section
+            const imageType = idSectio === 'report' ? 'rapport' : 
+                            idSectio === 'beforeAfterIntervention' ? 'beforeAfter' : 
+                            idSectio === 'quoteRequest' ? 'DemandeDevis' : 
+                            idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+
+            // Update the appropriate image array
+            if (imageType === 'rapport') {
+                setImageRapport(prev => prev.map(img => 
+                    img === photo ? uri : img
+                ));
+            } else if (imageType === 'beforeAfter') {
+                setImageBeforeAfterIntervention(prev => prev.map(img => 
+                    img === photo ? uri : img
+                ));
+            } else if (imageType === 'devis') {
+                setDevisImages(prev => prev.map(img => 
+                    img === photo ? uri : img
+                ));
+            }
+
+            // Clear drawings and close drawing tools
+            clearDrawings();
+            setShowDrawingTools(false);
+            
+            console.log('Image saved successfully to arrays');
+            Alert.alert('Succès', 'Image modifiée sauvegardée avec succès!');
+        } catch (error) {
+            console.error('Error saving image:', error);
+            console.error('Error details:', JSON.stringify(error));
+            Alert.alert('Erreur', `Impossible de sauvegarder l'image modifiée: ${error.message || 'Erreur inconnue'}`);
+        }
+    };
+
+    // Color options
+    const colors = ['#FF0000', '#00FF00', '#0000FF', '#000000', '#FFFFFF'];
+    const strokeWidths = [1, 3, 5, 8];
     useEffect(() => {
         // Simulating API fetch for meter data
         const fetchMeters = async () => {
@@ -988,8 +1354,17 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     };
 
     const {
-        resetInterventionData
+        interventionData,
+        resetInterventionData,
+        updateInterventionField
     } = useIntervention();
+
+    // Check if localisations exist and if they contain compteur
+    const localisationsList = interventionData?.__prestation?.[0]?.localisations || [];
+    const hasLocalisations = localisationsList.length > 0;
+    const hasCompteur = localisationsList.some(localisation =>
+        localisation.compteurs.length > 0
+    );
     // Handle form submission
     const handleSubmit = async (dateOverride?: Date) => {
         try {
@@ -999,7 +1374,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
 
             const startTimestamp = formatDateString(startDateTime);
             const endTimestamp = formatDateString(endDateTime);
-            const realisationTimestamp = formatDateString(endDateTime);
+            const realisationTimestamp = formatDateString(new Date());
 
             const matricule = await AsyncStorage.getItem('@matricule')
             // Call the updateInterventionHandler with form values
@@ -1033,7 +1408,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             // rapportFiiles.push(newRapportFiles)
 
             // Convert the base64 string to a file object for React Native
-            const signPath = await CommonFunction.saveSignature(signature) as string
+            const signPath = await CommonFunction.saveSignature(signature, 'signature') as string
             const signatureFile: fileModel = {
                 uri: signPath,
                 type: 'image/png',
@@ -1054,7 +1429,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
 
                 // Convert devis signature to file if exists
                 if (devisSignature) {
-                    const devisSignPath = await CommonFunction.saveSignature(devisSignature) as string;
+                    const devisSignPath = await CommonFunction.saveSignature(devisSignature, 'devisSignature') as string;
                     devisAvantTravauxSignature = {
                         uri: devisSignPath,
                         type: 'image/png',
@@ -1093,8 +1468,8 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 longitudeDebutHZ, // longitudeDebutInterventionHZ
                 latitudeFinHZ, // latitudeFinInterventionHZ
                 longitudeFinHZ, // longitudeFinInterventionHZ
-                startTimestamp, // dateDebut
-                endTimestamp, // dateFin
+                dateDebut, // dateDebut
+                dateFin, // dateFin
                 realisationTimestamp, // dateRealisation
                 flagEnabled, // drapeau
                 overtimeEnabled,
@@ -1150,7 +1525,6 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     };
 
     const [modalFinIntervenion, setModalFinIntervention] = useState(false);
-    const [isDrawing, setIsDrawing] = useState(false);
     const [isConnected, setIsConnected] = useState(true);
     const [selectedDebutDateTime, setSelectedDebutDateTime] = useState<Date | null>(null);
 
@@ -1175,11 +1549,11 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     // Add useEffect to receive devis data from DevisAvantTravauxScreen
     useEffect(() => {
         if (route.params?.devisData) {
-            const { articles, imageRapport, signataire, signature, modeReglement, image } = route.params.devisData;
+            const { articles, imageRapportDevis, signataire, signatureDevis, modeReglement, image } = route.params.devisData;
             setDevisArticles(articles || []);
-            setDevisImages(imageRapport || []);
+            setDevisImages(imageRapportDevis || []);
             setDevisSignataire(signataire || '');
-            setDevisSignature(signature);
+            setDevisSignature(signatureDevis);
             setDevisModeReglement(modeReglement || '');
             setDevisImage(image);
             console.log('Received devis data:', route.params.devisData);
@@ -1198,10 +1572,10 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                         const devisData = JSON.parse(storedDevisData);
                         setDevisArticles(devisData.articles || []);
                         console.log(devisData.imageRapport, 'devisData.imageRapport');
-                        setDevisImages(devisData.imageRapport || []);
+                        setDevisImages(devisData.imageRapportDevis || []);
                         console.log(devisImages, 'devisImages');
                         setDevisSignataire(devisData.signataire || '');
-                        setDevisSignature(devisData.signature);
+                        setDevisSignature(devisData.signatureDevis);
                         setDevisModeReglement(devisData.modeReglement || '');
                         setDevisImage(devisData.image);
                         console.log('Read devis data from storage:', devisData);
@@ -1246,22 +1620,124 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     };
 
     // Handler for DebutInterventionModal confirm (for Fin Intervention)
-    const handleFinInterventionConfirm = (date: Date) => {
-        setSelectedFinDateTime(date);
-        setModalFinIntervention(false);
-        setTimeout(() => handleSubmit(date), 0);
-    };
+    // const handleFinInterventionConfirm = (date: Date) => {
+    //     setSelectedFinDateTime(date);
+    //     setModalFinIntervention(false);
+    //     setTimeout(() => handleSubmit(date), 0);
+    // };
 
     // Handler for DebutInterventionModal confirm (for Debut Intervention)
-    const handleDebutInterventionConfirm = (date: Date) => {
-        setSelectedDebutDateTime(date);
+    const handleFinInterventionConfirm = async (date: Date) => {
+
         setModalFinIntervention(false);
-        setTimeout(() => handleSubmit(date), 0);
+        console.log(date, 'date');
+        
+        setDateFin(date.toLocaleString('fr-FR'))
+        console.log(dateFin, 'dateFin');
+        
+        try {
+            // Capture current location
+            const locationVerifier = new LocationVerifier();
+            const currentLocation = await locationVerifier.getCurrentLocation();
+            
+            // Get building information from intervention context
+            const buildingInfo = interventionData?.infos_Immeuble?.[0];
+            let isAtBuilding = false;
+            
+            if (buildingInfo && (buildingInfo as any).latitude && (buildingInfo as any).longitude) {
+                // Add building to location verifier
+                locationVerifier.addBuilding(
+                    'current_building',
+                    {
+                        latitude: parseFloat((buildingInfo as any).latitude),
+                        longitude: parseFloat((buildingInfo as any).longitude)
+                    },
+                    (buildingInfo as any).designation || 'Building',
+                    50 // 50 meter threshold
+                );
+                
+                // Check if user is at the building
+                isAtBuilding = locationVerifier.isAtBuilding('current_building', currentLocation) || false;
+            }
+            
+            // Store location data based on building zone check
+            if (isAtBuilding) {
+                // User is at building - store regular coordinates
+                setLatitudeFin(currentLocation.latitude);
+                setLongitudeFin(currentLocation.longitude);
+                setLatitudeFinHZ(undefined);
+                setLongitudeFinHZ(undefined);
+                
+                console.log('📍 User is at building - storing regular coordinates:', currentLocation);
+            } else {
+                // User is outside building zone - store HZ coordinates
+                setLatitudeFin(undefined);
+                setLongitudeFin(undefined);
+                setLatitudeFinHZ(currentLocation.latitude);
+                setLongitudeFinHZ(currentLocation.longitude);
+                
+                console.log('📍 User is outside building zone - storing HZ coordinates:', currentLocation);
+            }
+console.log(latitudeFin, 'latitudeFin');
+console.log(longitudeFin, 'longitudeFin');
+console.log(latitudeFinHZ, 'latitudeFinHZ');
+console.log(longitudeFinHZ, 'longitudeFinHZ');
+console.log(dateFin, 'dateFin');
+            setTimeout(() => handleSubmit(date), 3000);
+            
+        } catch (error) {
+            console.error('❌ Error capturing location:', error);
+            // Continue with intervention start even if location capture fails
+        }
+        
     };
 
-    // Add state for intervention tracking
-    const [interventionDuration, setInterventionDuration] = useState<string>('');
-    const [interventionStartTime, setInterventionStartTime] = useState<Date | null>(null);
+    // Add state for image drawing canvas
+    const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
+    const [drawingImageUri, setDrawingImageUri] = useState<string | null>(null);
+    const [drawingImageType, setDrawingImageType] = useState<'rapport' | 'beforeAfter' | 'DemandeDevis' |'devis' | null>(null);
+
+    // Function to open drawing canvas for a specific image
+    const openDrawingCanvas = (imageUri: string, imageType: 'rapport' | 'beforeAfter'| 'DemandeDevis' | 'devis') => {
+        setDrawingImageUri(imageUri);
+        setDrawingImageType(imageType);
+        setShowDrawingCanvas(true);
+    };
+
+    // Function to handle saving drawn image
+    const handleSaveDrawnImage = (savedImagePath: string) => {
+        if (drawingImageType === 'rapport') {
+            // Replace the image in imageRapport array
+            setImageRapport(prev => prev.map(img =>
+                img === drawingImageUri ? savedImagePath : img
+            ));
+        } else if (drawingImageType === 'beforeAfter') {
+            // Replace the image in imagebeforeAfterIntervention array
+            setImageBeforeAfterIntervention(prev => prev.map(img =>
+                img === drawingImageUri ? savedImagePath : img
+            ));
+        } else if (drawingImageType === 'devis') {
+            // Replace the image in devisImages array
+            setDevisImages(prev => prev.map(img =>
+                img === drawingImageUri ? savedImagePath : img
+            ));
+        }
+        else if (drawingImageType === 'DemandeDevis') {
+            // Replace the image in devisImages array
+            setImageQuoteRequest(prev => prev.map(img =>
+                img === drawingImageUri ? savedImagePath : img
+            ));
+        }
+
+        setShowDrawingCanvas(false);
+        setDrawingImageUri(null);
+        setDrawingImageType(null);
+
+        // Also close the main image modal
+        setModalVisible(false);
+
+        Alert.alert('Succès', 'Image modifiée sauvegardée avec succès!');
+    };
 
     // Add useEffect to start tracking the intervention
     useEffect(() => {
@@ -1269,6 +1745,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             try {
                 // Check if intervention is already started
                 const isActive = await InterventionStateService.isInterventionActive();
+console.log(isActive, 'isActive');
 
                 if (!isActive && noIntervention && codeImmeubleAddresse) {
                     // Start new intervention tracking
@@ -1285,6 +1762,17 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 } else if (isActive) {
                     // Get existing intervention info
                     const interventionInfo = await InterventionStateService.getCurrentInterventionInfo();
+                    console.log(interventionInfo, 'interventionInfo');
+                    setLatitudeDebut(interventionInfo.latitudeDebut);
+                    setlongitudeDebut(interventionInfo.longitudeDebut);
+                    setLatitudeDebutHZ(interventionInfo.latitudeDebutHZ);
+                    setlongitudeDebutHZ(interventionInfo.longitudeDebutHZ);
+                    setSelectedDebutDateTime(new Date(interventionInfo.startTime));
+console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
+
+                    setDateDebut(interventionInfo?.startDateTime)
+                    console.log(selectedDebutDateTime, 'selectedDebutDateTime', interventionInfo.startTime);
+                    
                     if (interventionInfo) {
                         setInterventionStartTime(new Date(interventionInfo.startTime));
                         setInterventionDuration(interventionInfo.duration);
@@ -1383,19 +1871,22 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                             />
                             <Text style={styles.footerButtonText}>Détail</Text>
                         </TouchableOpacity>
+                        {hasLocalisations && (
                         <TouchableOpacity style={styles.footerButton} onPress={() => goToReleveScreen()}>
                             <View>
                                 <Image
                                     source={require('./../../../assets/Icons/compteur.png')}
                                     style={styles.footerIcon}
                                 />
+                                    {hasCompteur && (
                                 <View style={styles.notificationBadge}>
                                     <Text style={styles.notificationText}>C</Text>
                                 </View>
+                                    )}
                             </View>
                             <Text style={styles.footerButtonText}>Prestations</Text>
-
                         </TouchableOpacity>
+                        )}
                         <TouchableOpacity style={styles.footerButton} onPress={() => setStep('step2')}>
                             <Image
                                 source={require('./../../../assets/Icons/done.png')}
@@ -1759,17 +2250,101 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                             </GestureHandlerRootView>
                         )}
                         <View style={{ flexDirection: 'row', paddingHorizontal: 50, backgroundColor: '#f5f5f5', }}>
-                            <TouchableOpacity style={styles.okButton} onPress={() => deletePicturesByUris(photo)}>
+                            {!showDrawingTools && (
+                                <>
+                                    <TouchableOpacity style={styles.okButton} onPress={() => deletePicturesByUris(photo)}>
                                 <Image style={styles.icon}
                                     source={require('../../../assets/Icons/trash.png')} />
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.okButton} onPress={() => setModalVisible(false)}>
-                                <Image
-                                    source={require('./../../../assets/Icons/done.png')}
-                                    style={styles.icon}
-                                />
+                            <TouchableOpacity 
+                                        style={[styles.okButton, showDrawingTools && styles.activeDrawingButton]}
+                                        onPress={() => {
+                                            const imageType = idSectio === 'report' ? 'rapport' :
+                                                idSectio === 'beforeAfterIntervention' ? 'beforeAfter' :
+                                                idSectio === 'quoteRequest' ? 'DemandeDevis' : 
+                                                idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+                                            openDrawingCanvas(photo, imageType);
+                                        }}
+                                    >
+                                        <Image style={styles.icon}
+                                            source={require('../../../assets/Icons/scribble.png')} />
                             </TouchableOpacity>
+
+                                    <TouchableOpacity style={styles.okButton} onPress={() => setModalVisible(false)}>
+                                    <Image
+                                        source={require('./../../../assets/Icons/done.png')}
+                                        style={styles.icon}
+                                    />
+                                </TouchableOpacity>
+                                </>)}
+                            {showDrawingTools && (
+                                <>
+                                    <TouchableOpacity style={styles.icon} onPress={undoLastDrawing}>
+                                        <Text style={styles.iconText}>↶</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.icon} onPress={clearDrawings}>
+                                        <Text style={styles.iconText}>🗑️</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.okButton, isSaving && styles.disabledButton]} 
+                                        onPress={recreateAndSaveImage}
+                                        disabled={isSaving}
+                                    >
+                                        {isSaving ? (
+                                            <Text style={styles.iconText}>⏳</Text>
+                                        ) : (
+                                            <Image style={styles.icon}
+                                                source={require('../../../assets/Icons/done.png')} />
+                                        )}
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
+
+                        {/* Drawing Tools Panel */}
+                        {showDrawingTools && (
+                            <View style={styles.drawingToolsPanel}>
+                                {/* Color Picker */}
+                                <View style={styles.colorPickerContainer}>
+                                    <Text style={styles.toolLabel}>Couleurs:</Text>
+                                    <View style={styles.colorGrid}>
+                                        {colors.map((color) => (
+                                            <TouchableOpacity
+                                                key={color}
+                                                style={[
+                                                    styles.colorOption,
+                                                    { backgroundColor: color },
+                                                    selectedColor === color && styles.selectedColor
+                                                ]}
+                                                onPress={() => setSelectedColor(color)}
+                                            />
+                                        ))}
+                    </View>
+                                </View>
+
+                                {/* Stroke Width Picker */}
+                                <View style={styles.strokeWidthContainer}>
+                                    <Text style={styles.toolLabel}>Taille:</Text>
+                                    <View style={styles.strokeWidthGrid}>
+                                        {strokeWidths.map((width) => (
+                                            <TouchableOpacity
+                                                key={width}
+                                                style={[
+                                                    styles.strokeWidthOption,
+                                                    selectedStrokeWidth === width && styles.selectedStrokeWidth
+                                                ]}
+                                                onPress={() => setSelectedStrokeWidth(width)}
+                                            >
+                                                <View style={[styles.strokeLine, {
+                                                    width: width * 2,
+                                                    height: width
+                                                }]} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                     </View>
                     {/* <DrawOnImage imageUri={photo} /> */}
                 </SafeAreaView>
@@ -1845,6 +2420,16 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 </SafeAreaView>
 
             </Modal>
+
+            {/* Drawing Canvas Modal */}
+            <Modal visible={showDrawingCanvas} transparent={true} animationType="slide">
+                <DrawOnImage
+                    imageUri={drawingImageUri || ''}
+                    onSave={handleSaveDrawnImage}
+                    onClose={() => setShowDrawingCanvas(false)}
+                />
+            </Modal>
+
             <DebutInterventionModal
                 visible={modalFinIntervenion}
                 onClose={() => setModalFinIntervention(false)}
@@ -2071,7 +2656,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        borderWidth: 1
+        // borderWidth: 1
     },
     modalContent: {
         width: width,
@@ -2529,6 +3114,127 @@ const styles = StyleSheet.create({
         color: '#888',
         fontStyle: 'italic',
         textAlign: 'center',
+    },
+    // Drawing styles
+    hiddenCaptureContainer: {
+        position: 'absolute',
+        top: -2000, // Move off-screen but not too far
+        left: -2000,
+        width: 800,
+        height: 600,
+        backgroundColor: 'white',
+        zIndex: -1,
+    },
+    captureImage: {
+        width: 800,
+        height: 600,
+    },
+    captureDrawingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'transparent',
+    },
+    captureDrawingSvg: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    imageCaptureContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    drawingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'transparent',
+    },
+    drawingSvg: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    activeDrawingButton: {
+        backgroundColor: '#007AFF',
+        borderRadius: 8,
+    },
+    iconText: {
+        fontSize: 20,
+        color: '#4b6cb7',
+        fontWeight: 'bold',
+    },
+    drawingToolsPanel: {
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#E0E0E0',
+    },
+    colorPickerContainer: {
+        marginBottom: 16,
+    },
+    toolLabel: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#333333',
+        marginBottom: 8,
+    },
+    colorGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+    },
+    colorOption: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        margin: 4,
+        borderWidth: 2,
+        borderColor: '#E0E0E0',
+    },
+    selectedColor: {
+        borderColor: '#007AFF',
+        borderWidth: 3,
+    },
+    strokeWidthContainer: {
+        alignItems: 'center',
+    },
+    strokeWidthGrid: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    strokeWidthOption: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 8,
+        margin: 4,
+        borderRadius: 6,
+        backgroundColor: '#F8F8F8',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    selectedStrokeWidth: {
+        backgroundColor: '#E3F2FD',
+        borderColor: '#007AFF',
+    },
+    strokeLine: {
+        backgroundColor: '#333333',
+        borderRadius: 2,
+    },
+    disabledButton: {
+        opacity: 0.5,
+        backgroundColor: '#cccccc',
     }
 })
 
