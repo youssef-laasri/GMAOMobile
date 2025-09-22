@@ -1,7 +1,11 @@
 import { View, Text, Animated, StyleSheet } from 'react-native'
 import React, { useEffect, useRef } from 'react'
 
-const Loader = () => {
+interface LoaderProps {
+    message?: string;
+}
+
+const Loader = ({ message = "Loading..." }: LoaderProps) => {
     const rotation = useRef(new Animated.Value(0)).current;
 
 
@@ -30,6 +34,7 @@ const Loader = () => {
                 style={[styles.image, animatedStyle]}
                 resizeMode="contain"
             />
+            <Text style={styles.loaderText}>{message}</Text>
         </View>
     )
 }
@@ -43,8 +48,15 @@ const styles = StyleSheet.create({
     },
     loadercontainer: {
         flex: 1,
-        justifyContent: 'center'
-
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    loaderText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#333',
+        textAlign: 'center',
+        fontWeight: '500'
     }
 })
 

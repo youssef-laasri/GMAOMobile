@@ -281,16 +281,15 @@ export const apiService = {
                     basePath: url,
                 })
             );
+            token = await AsyncStorage.getItem('@token')
             let apiImmeubleGetInfoImmeublePaginationGetRequest: ApiImmeubleGetInfoImmeublePaginationGetRequest = {
                 token: token as string,
                 pageNumber: pageNumber,
                 pageSize: pageSize
             }
             try {
-                token = await AsyncStorage.getItem('@token')
                 const response = await apiClient.apiImmeubleGetInfoImmeublePaginationGet(apiImmeubleGetInfoImmeublePaginationGetRequest);
-                console.log(response, 'response');
-                
+              
                 if (response) {
                 }
                 return response;
@@ -623,5 +622,6 @@ export const apiService = {
     },
 
 };
+
 
 

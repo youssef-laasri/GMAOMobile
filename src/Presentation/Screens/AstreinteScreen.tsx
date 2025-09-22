@@ -38,6 +38,7 @@ export default function AstreinteScreen() {
         
         await SqlLIteService.createImmeubleTable(db);
         const getNbrOfImmeubles = await apiService.getImmeublesPagination(page, 1);
+        console.log(getNbrOfImmeubles, 'getNbrOfImmeubles');
         while (hasMorePages) {
 
           const res = await apiService.getImmeublesPagination(page, itemsPerPage);
@@ -114,9 +115,9 @@ export default function AstreinteScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchAndStoreImmeubles();
-  }, [immeubles]);
+  // useEffect(() => {
+  //   fetchAndStoreImmeubles();
+  // }, [immeubles]);
   useEffect(() => {
 
     const loadInitialData = async () => {

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Platform, PermissionsAndroid, Modal, Keyboard, BackHandler, Dimensions, TouchableWithoutFeedback } from 'react-native'
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../Components/Header'
-import { FlatList, Gesture, GestureDetector, GestureHandlerRootView, TextInput } from 'react-native-gesture-handler';
+import { FlatList, Gesture, GestureDetector, GestureHandlerRootView, ScrollView, TextInput } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 import screenNames from '../../Infrastructure/Navigation/navigationNames';
 import { launchCamera } from 'react-native-image-picker';
@@ -520,7 +520,7 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
                         <View style={styles.container}>
                             <Header titleCom={title} />
                             <View style={styles.content}>
-                                <View>
+                                <ScrollView>
                                     <View>
                                         <View style={styles.inputRow}>
                                             <Text style={styles.inputLabel}>Signataire : </Text>
@@ -612,7 +612,7 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
 
                                             </View>)}
                                     </View>
-                                </View>
+                                </ScrollView>
                                 {/* Validate Button */}
                                 <TouchableOpacity style={styles.footerButton} onPress={() => validateDevis()}>
                                     <Image
@@ -671,7 +671,7 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
                 <SafeAreaView style={styles.modalContainer}>
                     <View style={styles.modalContent}>
                         {imageRapport && (
-                            <GestureHandlerRootView style={styles.container}>
+                            <GestureHandlerRootView style={styles.containerImage}>
                                 <GestureDetector gesture={combinedGestures}>
                                     <Animated.View style={styles.imageContainer}>
                                         <Animated.Image
@@ -683,7 +683,7 @@ const DevisAvantTravauxScreen = ({ route, navigation }) => {
                                 </GestureDetector>
                             </GestureHandlerRootView>
                         )}
-                        <View style={{ flexDirection: 'row', paddingHorizontal: 50, backgroundColor: '#f5f5f5', }}>
+                        <View style={{ flexDirection: 'row',justifyContent: 'space-between',width: '70%', backgroundColor: '#f5f5f5', }}>
                             <TouchableOpacity style={styles.okButton} onPress={() => deletePicturesByUris(photo)}>
                                 <Image style={styles.icon}
                                     source={require('../../../assets/Icons/trash.png')} />
@@ -707,9 +707,11 @@ const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
     container: {
-        height: '100%',
-
-    },
+            height: '100%',
+        },
+    containerImage: {
+height: '90%',
+        },
     image: {
         width: width,
         height: height,
@@ -960,7 +962,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        borderWidth: 1
+        // borderWidth: 1
     },
     modalContent: {
         width: width,
@@ -979,7 +981,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         // borderTopWidth: 1,
         borderTopColor: '#ddd',
-        width: '100%'
+        // width: '100%'
     },
     icon: {
         width: 35,

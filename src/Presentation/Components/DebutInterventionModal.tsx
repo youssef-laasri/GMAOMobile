@@ -22,6 +22,7 @@ const DebutInterventionModal = ({ visible, onClose, onConfirm, title, initialDat
 
     // Update datetime when initialDateTime prop changes or modal becomes visible
     useEffect(() => {
+        console.log(initialDateTime, 'selectedDate');
         if (visible) {
             if (initialDateTime) {
                 setDatetime(initialDateTime);
@@ -36,6 +37,8 @@ const DebutInterventionModal = ({ visible, onClose, onConfirm, title, initialDat
 
 
     const onChangeDate = (event: any, selectedDate?: Date) => {
+        console.log(selectedDate?.toLocaleString('fr-FR'), 'selectedDate');
+        
         if (selectedDate) {
             setDatetime(selectedDate);
             setShowDate(false);
@@ -43,6 +46,7 @@ const DebutInterventionModal = ({ visible, onClose, onConfirm, title, initialDat
     };
 
     const onChangeTime = (event: any, selectedDate?: Date) => {
+        console.log(selectedDate?.toLocaleString('fr-FR'), 'selectedDate');
         if (selectedDate) {
             setDatetime(selectedDate);
             setShowTime(false);

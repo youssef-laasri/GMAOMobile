@@ -283,7 +283,8 @@ export default function MenuButton() {
                 navigate(screenNames.DrapeauxScreen)
                 break;
             case 'CARTE':
-                navigate(screenNames.MapScreen)
+                Linking.openURL('https://www.google.com/maps');
+                // navigate(screenNames.MapScreen)
                 break;
             case 'ADMIN':
                 navigate(screenNames.AdminScreen)
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: moderateScale(14),
-        // fontWeight: '700',
+        fontWeight: '700',
         alignSelf: 'center',
         marginTop: 6,
         fontFamily: 'Poppins-Medium'

@@ -159,9 +159,16 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         }
 
         const rep = await apiService.getCountOfItems();
+        
+        if(rep.nbrDrapeaux != null){  
         await AsyncStorage.setItem('@nbrDrapeaux', rep.nbrDrapeaux?.toString() as string);
+        }
+        if(rep.nbrAlertes != null){
         await AsyncStorage.setItem('@nbrAlertes', rep.nbrAlertes?.toString() as string);
+        }
+        if(rep.nbrIntervention != null){
         await AsyncStorage.setItem('@nbrintervention', rep.nbrIntervention?.toString() as string);
+        }
 
         await AsyncStorage.setItem('@matricule', matricule as string);
         await AsyncStorage.setItem('@name', response.name as string);
@@ -292,22 +299,26 @@ console.log(lastConnection.created_at, 'lastConnection');
               console.error('❌ Auto-login sync error:', syncError);
               // Don't block auto-login if sync fails
             }
-
+            await AsyncStorage.setItem('@matricule', lastConnection?.username as string);
+            await AsyncStorage.setItem('@name', lastConnection?.name as string);
             const rep = await apiService.getCountOfItems();
             console.log(rep, 'rep');
             console.log(lastConnection.username, 'lastConnection', lastConnection.name);
             
-            
+            if(rep.nbrDrapeaux != null){  
             await AsyncStorage.setItem('@nbrDrapeaux', rep.nbrDrapeaux?.toString() as string);
+            }
+            if(rep.nbrAlertes != null){
             await AsyncStorage.setItem('@nbrAlertes', rep.nbrAlertes?.toString() as string);
+            }
+            if(rep.nbrIntervention != null){
             await AsyncStorage.setItem('@nbrintervention', rep.nbrIntervention?.toString() as string);
-            await AsyncStorage.setItem('@matricule', lastConnection?.username as string);
-            await AsyncStorage.setItem('@name', lastConnection?.name as string);
+            }
             navigation.navigate(screenNames.HomeScreen as never)
           }
         }
       } catch (error) {
-        console.error('Error retrieving token:', error);
+        console.error('Error retrieving data:', error);
       }
     };
 

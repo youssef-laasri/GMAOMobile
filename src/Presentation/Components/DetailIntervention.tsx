@@ -40,9 +40,11 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
     const [compo, setcompo] = useState('intervention')
     const { navigate } = useNavigation();
     const [loading, setLoading] = useState(true);
+    const [positionLoading, setPositionLoading] = useState(false);
     const [latitude, setLatitude] = useState('')
     const [longitude, setLongitude] = useState('')
     const [selectedDebutDateTime, setSelectedDebutDateTime] = useState<Date | null>(null);
+    const [isAnotherInterventionActive, setIsAnotherInterventionActive] = useState(false);
     const {
         updateInterventionData
     } = useIntervention();
@@ -54,7 +56,35 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
             console.log('📅 Formatted selectedDebutDateTime:', selectedDebutDateTime.toLocaleString('fr-FR'));
         }
     }, [selectedDebutDateTime]);
+
+    // Check if another intervention is active
     useEffect(() => {
+        console.log(noInterventionParam, 'noInterventionParam');
+        
+        const checkInterventionStatus = async () => {
+            try {
+                const isActive = await InterventionStateService.isInterventionActive();
+                const currentState = await InterventionStateService.getInterventionState();
+                
+                // Check if there's an active intervention that's different from the current one
+                if (isActive && currentState && currentState.noIntervention !== noInterventionParam) {
+                    setIsAnotherInterventionActive(true);
+                    console.log('🚫 Another intervention is active:', currentState.noIntervention);
+                } else {
+                    setIsAnotherInterventionActive(false);
+                    console.log('✅ No other intervention is active');
+                }
+            } catch (error) {
+                console.error('Error checking intervention status:', error);
+                setIsAnotherInterventionActive(false);
+            }
+        };
+
+        checkInterventionStatus();
+    }, [noInterventionParam]);
+    useEffect(() => {
+        console.log(noInterventionParam, 'noInterventionParam');
+        
         if (noInterventionParam != undefined && noInterventionParam != '') {
             setcompo('intervention')
             const fetchDetailIntervention = async (noInter) => {
@@ -354,6 +384,7 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         return d;
     }
     async function showModalDebutIntervention() {
+        setPositionLoading(true);
         try {
             // Use LocationVerifier for consistent location checking
             const locationVerifier = new LocationVerifier();
@@ -400,6 +431,8 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         } catch (error) {
             console.error('❌ Error checking location:', error);
             Alert.alert('Erreur', 'Impossible de récupérer la position de l\'appareil.');
+        } finally {
+            setPositionLoading(false);
         }
     }
 
@@ -408,8 +441,9 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
 
             <Header titleCom={title} />
             {loading && (<Loader />)}
+            {positionLoading && (<Loader message="Récupération de la localisation..." />)}
 
-            {!loading && (
+            {!loading && !positionLoading && (
                 <View style={styles.infoDetailContainer}>
                     <ScrollView style={styles.infoDetailContainer}>
                         {compo === 'intervention' && <View style={styles.header}>
@@ -427,7 +461,7 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                     </ScrollView>
                 </View>)}
 
-            {!loading && (
+            {!loading && !positionLoading && (
                 <View style={styles.footer}>
                     <TouchableOpacity style={styles.footerButton} onPress={() => setmodalHistoInterventionVisible(true)}>
                         <Image
@@ -450,29 +484,49 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                         />
                         <Text style={styles.footerButtonText}>Aller à</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.footerButton} onPress={() => showModalDebutIntervention()}>
-                        <Image
-                            source={require('./../../../assets/Icons/demarer.png')}
-                            style={styles.footerIcon}
-                        />
-                        <Text style={styles.footerButtonText}>Dém.</Text>
-                    </TouchableOpacity>
+                    {!isAnotherInterventionActive && (
+                        <TouchableOpacity style={styles.footerButton} onPress={() => showModalDebutIntervention()}>
+                            <Image
+                                source={require('./../../../assets/Icons/demarer.png')}
+                                style={styles.footerIcon}
+                            />
+                            <Text style={styles.footerButtonText}>Dém.</Text>
+                        </TouchableOpacity>
+                    )}
+                    {isAnotherInterventionActive && (
+                        <TouchableOpacity 
+                            style={styles.footerButton} 
+                            onPress={() => {
+                                Alert.alert(
+                                    'Intervention en cours',
+                                    'Une autre intervention est déjà en cours. Veuillez terminer l\'intervention actuelle avant d\'en démarrer une nouvelle.',
+                                    [{ text: 'OK' }]
+                                );
+                            }}
+                        >
+                            <Image
+                                source={require('./../../../assets/Icons/demarer.png')}
+                                style={[styles.footerIcon, { opacity: 0.3 }]}
+                            />
+                            <Text style={[styles.footerButtonText, { opacity: 0.3 }]}>Dém.</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>)}
-            {!loading && (<HistoriqueModal
+            {!loading && !positionLoading && (<HistoriqueModal
                 titleModal={'Historique Intervention'}
                 visible={modalHistoInterventionVisible}
                 onClose={() => setmodalHistoInterventionVisible(false)}
                 codeImmeuble={infoInter?.header.title}
                 addresseImmeuble={infoInter?.header.address}
             />)}
-            {!loading && (<HistoriqueModal
+            {!loading && !positionLoading && (<HistoriqueModal
                 titleModal={'Historique Devis'}
                 visible={modalHistoDevisVisible}
                 onClose={() => setmodalHistoDevisVisible(false)}
                 codeImmeuble={infoInter?.header.title}
                 addresseImmeuble={infoInter?.header.address}
             />)}
-            {!loading && (<DebutInterventionModal
+            {!loading && !positionLoading && (<DebutInterventionModal
                 visible={modalDebutIntervenion}
                 onClose={() => setModalDebutIntervention(false)}
                 onConfirm={handleConfirmIntervention}
@@ -489,7 +543,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f5f5',
     },
     infoDetailContainer: {
-        height: '80%'
+        height: '80%',
     },
     header: {
         marginVertical: 6,
@@ -497,6 +551,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f5f5',
     },
     headerTitle: {
+        color: 'black',
         fontSize: 16,
         fontWeight: 'bold',
     },

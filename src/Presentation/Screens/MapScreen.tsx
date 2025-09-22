@@ -2,25 +2,86 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../Components/Header';
-import MapView, { PROVIDER_GOOGLE, UrlTile } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, UrlTile, Marker } from 'react-native-maps';
 
 interface MapScreenProps {
     navigation: any;
+    route?: any;
 }
 
-const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
+interface InterventionData {
+    noIntervention?: string;
+    codeImmeuble?: string;
+    adressImmeuble?: string;
+    designation?: string;
+    datePrevu?: string;
+    latitude?: string;
+    longitude?: string;
+    __urgence?: boolean;
+}
+
+const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     const [mapError, setMapError] = useState<string | null>(null);
     const [useGoogleMaps, setUseGoogleMaps] = useState(true);
     const [mapStatus, setMapStatus] = useState<string>('Initializing...');
     const [useSimpleMap, setUseSimpleMap] = useState(false);
     const [loadingEnabled, setLoadingEnabled] = useState(true);
+    const [planningData, setPlanningData] = useState<InterventionData[]>([]);
+    const [mapRegion, setMapRegion] = useState({
+        latitude: 48.8566,
+        longitude: 2.3522,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+    });
 
     useEffect(() => {
         console.log('MapScreen mounted');
-        console.log('PROVIDER_GOOGLE:', PROVIDER_GOOGLE);
-        console.log('MapView component:', MapView);
-        console.log('UrlTile component:', UrlTile);
-        setMapStatus('Component loaded');
+        console.log('Route params:', route?.params);
+        
+        // Check if planning data was passed from Header
+        if (route?.params?.planningData) {
+            const interventions = route.params.planningData;
+            setPlanningData(interventions);
+            setMapStatus(`Loaded ${interventions.length} interventions`);
+            
+            // Calculate map region to fit all interventions
+            const validInterventions = interventions.filter(intervention => 
+                intervention.latitude && intervention.longitude && 
+                intervention.latitude.trim() !== '' && intervention.longitude.trim() !== ''
+            );
+            
+            if (validInterventions.length > 0) {
+                // Calculate center point
+                const totalLat = validInterventions.reduce((sum, intervention) => 
+                    sum + parseFloat(intervention.latitude!), 0);
+                const totalLng = validInterventions.reduce((sum, intervention) => 
+                    sum + parseFloat(intervention.longitude!), 0);
+                const centerLat = totalLat / validInterventions.length;
+                const centerLng = totalLng / validInterventions.length;
+                
+                // Calculate bounds to fit all markers
+                const lats = validInterventions.map(i => parseFloat(i.latitude!));
+                const lngs = validInterventions.map(i => parseFloat(i.longitude!));
+                const minLat = Math.min(...lats);
+                const maxLat = Math.max(...lats);
+                const minLng = Math.min(...lngs);
+                const maxLng = Math.max(...lngs);
+                
+                const latDelta = Math.max((maxLat - minLat) * 1.2, 0.01); // Add 20% padding
+                const lngDelta = Math.max((maxLng - minLng) * 1.2, 0.01);
+                
+                setMapRegion({
+                    latitude: centerLat,
+                    longitude: centerLng,
+                    latitudeDelta: latDelta,
+                    longitudeDelta: lngDelta,
+                });
+                
+                console.log(`Map centered on ${centerLat}, ${centerLng} with ${validInterventions.length} markers`);
+            }
+        } else {
+            setMapStatus('No planning data - using default map');
+        }
         
         // Auto-test OpenStreetMap after 3 seconds if Google Maps shows black screen
         const timer = setTimeout(() => {
@@ -32,7 +93,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         }, 3000);
         
         return () => clearTimeout(timer);
-    }, []);
+    }, [route?.params]);
 
     const handleMapReady = () => {
         console.log('Map is ready!');
@@ -145,7 +206,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <Header titleCom="CARTE" />
+            <Header titleCom={route?.params?.title || "CARTE"} />
             <View style={styles.controlsContainer}>
                 <Text style={styles.statusText}>Status: {mapStatus}</Text>
                 <TouchableOpacity style={styles.toggleButton} onPress={toggleMapProvider}>
@@ -204,12 +265,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
                         <MapView
                             style={styles.map}
                             provider={useGoogleMaps ? PROVIDER_GOOGLE : undefined}
-                            initialRegion={{
-                                latitude: 48.8566,
-                                longitude: 2.3522,
-                                latitudeDelta: 0.0922,
-                                longitudeDelta: 0.0421,
-                            }}
+                            initialRegion={mapRegion}
                             showsUserLocation={true}
                             showsMyLocationButton={true}
                             onMapReady={handleMapReady}
@@ -225,6 +281,30 @@ const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
                                     tileSize={256}
                                 />
                             )}
+                            
+                            {/* Render markers for all interventions */}
+                            {planningData.map((intervention, index) => {
+                                if (intervention.latitude && intervention.longitude && 
+                                    intervention.latitude.trim() !== '' && intervention.longitude.trim() !== '') {
+                                    
+                                    const lat = parseFloat(intervention.latitude);
+                                    const lng = parseFloat(intervention.longitude);
+                                    
+                                    return (
+                                        <Marker
+                                            key={`${intervention.noIntervention}-${index}`}
+                                            coordinate={{
+                                                latitude: lat,
+                                                longitude: lng,
+                                            }}
+                                            title={intervention.designation || 'Intervention'}
+                                            description={`${intervention.codeImmeuble || ''} - ${intervention.adressImmeuble || ''}`}
+                                            pinColor={intervention.__urgence ? '#FF0000' : '#007AFF'}
+                                        />
+                                    );
+                                }
+                                return null;
+                            })}
                         </MapView>
                     )
                 ) : (

@@ -153,7 +153,6 @@ export const SqlLIteService = {
   },
 
   insertImmeuble: async (db: SQLiteDatabase, immeubleInfo) => {
-console.log(immeubleInfo, 'immeubleInfo');
 
     await db.executeSql(
       `INSERT INTO immeubles (

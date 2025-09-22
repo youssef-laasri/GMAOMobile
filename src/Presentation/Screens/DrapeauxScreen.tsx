@@ -97,50 +97,95 @@ export default function DrapeauxScreen() {
       }
 
       // Use the same base URL as in apiServices
-      const BASE_URL = "https://gmao.groupe-dt.fr/";
+      const BASE_URL = "https://gmao.groupe-dt.fr";
       const interventionApi = new InterventionApi(new Configuration({
         basePath: BASE_URL,
       }));
 
       console.log('🗑️ Starting deletion of items:', Array.from(selectedItems));
-      console.log('🔑 Using token:', token ? 'Present' : 'Missing');
+      console.log('🔑 Using token:', token ? `Present (${token.substring(0, 10)}...)` : 'Missing');
       console.log('🌐 Base URL:', BASE_URL);
-      
+
       // Create the delete input with all selected items
       const deleteInput: DeleteDrapeauxInput = {
         noIntervention: Array.from(selectedItems)
       };
-      
+
       console.log('📦 Delete input:', deleteInput);
-      
-      // Make a single API call to delete all selected items
-      const result = await interventionApi.apiInterventionDeleteDrapeauPost({
-        token: token,
-        deleteDrapeauxInput: deleteInput,
-      });
-      
-      console.log('✅ Delete result:', result);
-      
-      // Remove deleted items from local state
-      setData(prevData => prevData.filter(item => !selectedItems.has(item.noIntervention as string)));
-      
-      // Reset selection and exit delete mode
-      setSelectedItems(new Set());
-      setIsDeleteMode(false);
-      
-      Alert.alert('Succès', `${selectedItems.size} élément(s) supprimé(s) avec succès.`);
+      console.log('📦 Delete input JSON:', JSON.stringify(deleteInput));
+
+      // Try the generated API client first
+      let result;
+      try {
+        result = await interventionApi.apiInterventionDeleteDrapeauPost({
+          token: token,
+          deleteDrapeauxInput: deleteInput,
+        });
+        console.log('✅ Delete result (API client):', result);
+      } catch (apiError) {
+        console.log('⚠️ API client failed, trying direct fetch:', apiError);
+
+        // Fallback to direct fetch
+        const response = await fetch(`${BASE_URL}api/Intervention/DeleteDrapeau?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(deleteInput),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        result = await response.json();
+        console.log('✅ Delete result (direct fetch):', result);
+      }
+
+      // Check if the result indicates success
+      if (result.status === '10000') {
+        // Remove deleted items from local state
+        setData(prevData => prevData.filter(item => !selectedItems.has(item.noIntervention as string)));
+
+        // Reset selection and exit delete mode
+        setSelectedItems(new Set());
+        setIsDeleteMode(false);
+        const response = apiService.getDrapeaux();
+        console.log(response, 'sdsds');
+
+        const json = (await response).result;
+        setData(json as []);
+      } else {
+        throw new Error('La réponse du serveur indique un échec de la suppression.');
+      }
+
     } catch (error: any) {
       console.error('❌ Error deleting items:', error);
-      
+
       // Provide more specific error messages
       let errorMessage = 'Une erreur est survenue lors de la suppression.';
-      
+
       if (error.message) {
         errorMessage = `Erreur: ${error.message}`;
       } else if (error.status) {
         errorMessage = `Erreur HTTP ${error.status}: ${error.statusText || 'Erreur de communication'}`;
+      } else if (error.response) {
+        // Handle response errors
+        const status = error.response.status;
+        const statusText = error.response.statusText;
+        errorMessage = `Erreur HTTP ${status}: ${statusText}`;
+
+        // Try to get more details from response body
+        if (error.response.data) {
+          console.log('Response data:', error.response.data);
+          if (typeof error.response.data === 'string') {
+            errorMessage += ` - ${error.response.data}`;
+          } else if (error.response.data.message) {
+            errorMessage += ` - ${error.response.data.message}`;
+          }
+        }
       }
-      
+
       Alert.alert('Erreur', errorMessage);
     } finally {
       setIsDeleting(false);
@@ -148,7 +193,7 @@ export default function DrapeauxScreen() {
   };
 
   const renderItem = ({ item }: { item: DrapeauxOutput }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.item}
       onPress={() => isDeleteMode ? handleItemSelect(item.noIntervention as string) : null}
       disabled={!isDeleteMode}
@@ -197,7 +242,7 @@ export default function DrapeauxScreen() {
       </View>)}
       {!loading && isDeleteMode && selectedItems.size > 0 && (
         <View style={styles.deleteButtonContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.deleteButton}
             onPress={handleDeleteSelected}
             disabled={isDeleting}
@@ -281,16 +326,20 @@ const styles = StyleSheet.create({
   },
   itemTextContainer: {
     flex: 1,
+
   },
   code: {
+    color: 'black',
     fontSize: 18,
     fontWeight: 'bold',
   },
   description: {
+    color: 'black',
     fontSize: 14,
     padding: 2,
   },
   date: {
+    color: 'black',
     padding: 2,
     fontSize: 14,
     color: '#333',

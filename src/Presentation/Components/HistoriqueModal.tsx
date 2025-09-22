@@ -8,6 +8,7 @@ import { HistoriqueDevis, HistoriqueDevisInput, HistoriqueIntervention, Historiq
 const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseImmeuble }) => {
     const [searchText, setSearchText] = useState('');
     const [rotated, setRotated] = useState(false);
+    const [isSortedAscending, setIsSortedAscending] = useState(true);
     //     {
     //         id: '1',
     //         date: 'mardi 25 février 2025',
@@ -129,6 +130,37 @@ const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseI
 
         return () => backHandler.remove();
     }, [visible, onClose]);
+    // Sorting functions
+    const sortProposalsByDateCreation = (proposals: HistoriqueDevis[], ascending: boolean) => {
+        return [...proposals].sort((a, b) => {
+            const dateA = new Date(a.dateCreation).getTime();
+            const dateB = new Date(b.dateCreation).getTime();
+            return ascending ? dateA - dateB : dateB - dateA;
+        });
+    };
+
+    const sortInterventionsByDateRealisation = (interventions: HistoriqueIntervention[], ascending: boolean) => {
+        return [...interventions].sort((a, b) => {
+            const dateA = new Date(a.dateRealise).getTime();
+            const dateB = new Date(b.dateRealise).getTime();
+            return ascending ? dateA - dateB : dateB - dateA;
+        });
+    };
+
+    const handleSortToggle = () => {
+        const newSortOrder = !isSortedAscending;
+        setIsSortedAscending(newSortOrder);
+        setRotated(!rotated);
+        
+        if (titleModal === 'Historique Devis') {
+            const sortedProposals = sortProposalsByDateCreation(proposals, newSortOrder);
+            setProposals(sortedProposals);
+        } else if (titleModal === 'Historique Intervention') {
+            const sortedData = sortInterventionsByDateRealisation(data, newSortOrder);
+            setData(sortedData);
+        }
+    };
+
     const filteredData = data.filter(item => {
         const searchLower = searchText.toLowerCase();
         return (
@@ -292,7 +324,7 @@ const HistoriqueModal = ({ titleModal, visible, onClose, codeImmeuble, addresseI
                             value={searchText}
                             onChangeText={setSearchText}
                         />
-                        <TouchableOpacity style={styles.filterButton} onPress={() => setRotated(!rotated)}>
+                        <TouchableOpacity style={styles.filterButton} onPress={handleSortToggle}>
                             <Image style={[
                                 styles.filterIcon,
                                 { transform: [{ rotate: rotated ? "180deg" : "0deg" }] },

@@ -1,4 +1,4 @@
-import { View, Text, Image, StyleSheet, TouchableOpacity, Linking } from 'react-native'
+import { View, Text, Image, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import screenNames from '../../Infrastructure/Navigation/navigationNames';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -211,7 +211,7 @@ const Header = ({ titleCom, onDeleteModeToggle }: HeaderProps) => {
             
             if (!planningData) {
                 console.log('No planning data available');
-                await Linking.openURL('https://www.google.com/maps');
+                Alert.alert('Aucune donnée', 'Aucune donnée de planning disponible');
                 return;
             }
             
@@ -224,49 +224,23 @@ const Header = ({ titleCom, onDeleteModeToggle }: HeaderProps) => {
             
             if (allInterventions.length === 0) {
                 console.log('No interventions found in jour/en attente tabs');
-                await Linking.openURL('https://www.google.com/maps');
+                Alert.alert('Aucune intervention', 'Aucune intervention trouvée dans le planning');
                 return;
             }
             
             console.log(`Found ${allInterventions.length} interventions to display on map`);
             
-            // Create Google Maps URL with multiple addresses
-            // For multiple locations, we'll use a search query approach
-            if (allInterventions.length === 1) {
-                // Single intervention - direct navigation
-                const intervention = allInterventions[0];
-                const address = encodeURIComponent(intervention.adressImmeuble || '');
-                const url = `https://www.google.com/maps/search/?api=1&query=${address}`;
-                console.log('Opening single intervention location:', url);
-                await Linking.openURL(url);
-            } else {
-                // Multiple interventions - create a search with all addresses
-                const addresses = allInterventions
-                    .map(intervention => intervention.adressImmeuble)
-                    .filter(address => address && address.trim() !== '')
-                    .slice(0, 10); // Limit to 10 addresses to avoid URL length issues
-                
-                if (addresses.length > 0) {
-                    // Create a search query with multiple addresses
-                    const searchQuery = addresses.join(' OR ');
-                    const encodedQuery = encodeURIComponent(searchQuery);
-                    const url = `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
-                    console.log('Opening multiple intervention locations:', url);
-                    await Linking.openURL(url);
-                } else {
-                    console.log('No valid addresses found');
-                    await Linking.openURL('https://www.google.com/maps');
-                }
-            }
+            // Navigate to MapScreen with planning data
+            // navigation.navigate(screenNames.MapScreen, {
+            //     planningData: allInterventions,
+            //     title: 'Planning Interventions'
+            // });
+
+            await Linking.openURL('https://www.google.com/maps');
             
         } catch (error) {
             console.error('Error opening planning maps:', error);
-            // Fallback to general Google Maps
-            try {
-                await Linking.openURL('https://www.google.com/maps');
-            } catch (fallbackError) {
-                console.error('Error with fallback:', fallbackError);
-            }
+            Alert.alert('Erreur', 'Impossible de charger les données de planning');
         }
     }
 
@@ -396,6 +370,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-around'
     },
     title: {
+        color: 'black',
         fontSize: 22,
         paddingHorizontal: 10,
         // marginTop : 5,

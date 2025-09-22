@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ImageSourcePropType, TouchableOpacity, Linking, Platform, PermissionsAndroid, Alert, Modal, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, BackHandler, Dimensions, Image, PanResponder } from 'react-native'
+import { View, Text, StyleSheet, ImageSourcePropType, TouchableOpacity, Linking, Platform, PermissionsAndroid, Alert, Modal, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, BackHandler, Dimensions, Image, PanResponder, ActivityIndicator } from 'react-native'
 import React, { useEffect, useRef, useState } from 'react'
 import Header from '../Components/Header';
 import { FlatList, Gesture, GestureDetector, GestureHandlerRootView, PinchGestureHandler, ScrollView, Switch, TextInput } from 'react-native-gesture-handler';
@@ -26,6 +26,7 @@ import InfoModal from '../Components/InfoModal';
 import { InterventionStateService } from '../../Application/Services/InterventionStateService';
 import { useReferentiel } from '../../Infrastructure/Contexte/ReferentielContext';
 import LocationVerifier from '../../Application/Services/checkLocationHZ';
+import FinInterventionModal from '../Components/FinInterventionModal';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface FormulaireInterventionScreenProps {
@@ -64,6 +65,31 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     const [recordPath, setRecordPath] = useState('');
     const [isRecordDeleted, setisRecordDeleted] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSubmittingIntervention, setIsSubmittingIntervention] = useState(false);
+
+    // Helper function to save images to intervention state
+    const saveImagesToState = async (imageRapportData?: string[], imageBeforeAfterData?: string[], imageQuoteRequestData?: string[]) => {
+        try {
+            const imagesToSave: any = {};
+            
+            if (imageRapportData !== undefined) {
+                imagesToSave.imageRapport = imageRapportData;
+            }
+            if (imageBeforeAfterData !== undefined) {
+                imagesToSave.imagebeforeAfterIntervention = imageBeforeAfterData;
+            }
+            if (imageQuoteRequestData !== undefined) {
+                imagesToSave.imagequoteRequest = imageQuoteRequestData;
+            }
+            
+            if (Object.keys(imagesToSave).length > 0) {
+                await InterventionStateService.saveImages(imagesToSave);
+                console.log('✅ Saved images to intervention state:', imagesToSave);
+            }
+        } catch (error) {
+            console.error('❌ Error saving images to intervention state:', error);
+        }
+    };
 
     const [player] = useState(new AudioRecorderPlayer());
     const [datetime, setDatetime] = useState(new Date());
@@ -124,11 +150,11 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             }
         };
         fetchModeRegelement()
-    }, [navigation, []]);
+    }, []);
 
     const [listPrimeConventionelle, setListPrimeConventionelle] = useState<PriPrimeDTO[]>([]);
 
-        useEffect(() => {
+    useEffect(() => {
         // const fetchPrime = async () => {
         //     try {
         //         const response = await apiService.getAllPrimeConventionelle();
@@ -318,7 +344,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             // Get all drawing keys from AsyncStorage
             const keys = await AsyncStorage.getAllKeys();
             const drawingKeys = keys.filter(key => key.startsWith('drawing_'));
-            
+
             for (const key of drawingKeys) {
                 const drawingDataStr = await AsyncStorage.getItem(key);
                 if (drawingDataStr) {
@@ -482,6 +508,20 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             console.log(status, 'ljhflfj', imageRapport);
 
             setRecordPath(recordPath);
+            
+            // Save recordPath to intervention state
+            const saveRecordPathToState = async () => {
+                try {
+                    await InterventionStateService.saveFormData({
+                        recordPath: recordPath
+                    });
+                    console.log('✅ Saved recordPath to intervention state:', recordPath);
+                } catch (error) {
+                    console.error('❌ Error saving recordPath to intervention state:', error);
+                }
+            };
+            
+            saveRecordPathToState();
         }
     }, [route.params?.recordPath]);
     // Handle photo additions separately
@@ -491,26 +531,50 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             if (isConnected) {
                 switch (idSection) {
                     case 'report':
-                        setImageRapport(prev => [...prev, photoUri]);
+                        setImageRapport(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(newImages);
+                            return newImages;
+                        });
                         break;
                     case 'beforeAfterIntervention':
-                        setImageBeforeAfterIntervention(prev => [...prev, photoUri]);
+                        setImageBeforeAfterIntervention(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(undefined, newImages);
+                            return newImages;
+                        });
                         break;
                     case 'quoteRequest':
-                        setImageQuoteRequest(prev => [...prev, photoUri]);
+                        setImageQuoteRequest(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(undefined, undefined, newImages);
+                            return newImages;
+                        });
                         break;
                 }
             } else {
                 // Offline: add to state and queue upload
                 switch (idSection) {
                     case 'report':
-                        setImageRapport(prev => [...prev, photoUri]);
+                        setImageRapport(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(newImages);
+                            return newImages;
+                        });
                         break;
                     case 'beforeAfterIntervention':
-                        setImageBeforeAfterIntervention(prev => [...prev, photoUri]);
+                        setImageBeforeAfterIntervention(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(undefined, newImages);
+                            return newImages;
+                        });
                         break;
                     case 'quoteRequest':
-                        setImageQuoteRequest(prev => [...prev, photoUri]);
+                        setImageQuoteRequest(prev => {
+                            const newImages = [...prev, photoUri];
+                            saveImagesToState(undefined, undefined, newImages);
+                            return newImages;
+                        });
                         break;
                 }
                 // Queue the upload
@@ -608,13 +672,25 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             // Only execute deletion if user clicked OK
             switch (idSectio) {
                 case 'report':
-                    setImageRapport(prev => prev.filter(uri => !photoUri.includes(uri)));
+                    setImageRapport(prev => {
+                        const newImages = prev.filter(uri => !photoUri.includes(uri));
+                        saveImagesToState(newImages);
+                        return newImages;
+                    });
                     break;
                 case 'beforeAfterIntervention':
-                    setImageBeforeAfterIntervention(prev => prev.filter(uri => !photoUri.includes(uri)));
+                    setImageBeforeAfterIntervention(prev => {
+                        const newImages = prev.filter(uri => !photoUri.includes(uri));
+                        saveImagesToState(undefined, newImages);
+                        return newImages;
+                    });
                     break;
                 case 'quoteRequest':
-                    setImageQuoteRequest(prev => prev.filter(uri => !photoUri.includes(uri)));
+                    setImageQuoteRequest(prev => {
+                        const newImages = prev.filter(uri => !photoUri.includes(uri));
+                        saveImagesToState(undefined, undefined, newImages);
+                        return newImages;
+                    });
                     break;
             }
             setModalVisible(false)
@@ -907,33 +983,33 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
 
     // Simple test capture function
     const testCapture = async () => {
-            setShowDrawingTools(false)
+        setShowDrawingTools(false)
     };
     const captureVisibleContainer = async () => {
         try {
             console.log('Starting alternative capture...');
-            
+
             // Wait for everything to be ready
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
+
             // Try to capture the visible animated container
             const animatedContainerRef = useRef<View>(null);
-            
+
             if (!animatedContainerRef.current) {
                 console.log('No animated container ref available');
                 return null;
             }
-            
+
             console.log('Capturing visible container...');
             const uri = await captureRef(animatedContainerRef.current, {
                 format: 'jpg',
                 quality: 0.9,
                 result: 'tmpfile',
             });
-            
+
             console.log('Visible container captured:', uri);
             return uri;
-            
+
         } catch (error) {
             console.error('Error capturing visible container:', error);
             return null;
@@ -941,14 +1017,14 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     };
     const recreateAndSaveImage = async () => {
         if (isSaving) return; // Prevent multiple saves
-        
+
         setIsSaving(true);
         try {
             console.log('Starting image recreation...');
-            
+
             // Wait for component to be fully rendered and image to load
             await new Promise(resolve => setTimeout(resolve, 500));
-            
+
             // Wait for image to load and dimensions to be available
             if (!imageLoaded || imageDimensions.width === 0) {
                 console.log('Waiting for image to load and dimensions...');
@@ -958,12 +1034,12 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                     attempts++;
                 }
             }
-            
+
             console.log('Image loaded status:', imageLoaded);
             console.log('Image dimensions:', imageDimensions);
-            
+
             const targetView = imageContainerRef.current || imageContainerView;
-            
+
             if (!targetView) {
                 console.log('No view available for capture');
                 Alert.alert('Erreur', 'Impossible de trouver le conteneur d\'image');
@@ -975,7 +1051,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             console.log('Photo URI:', photo);
             console.log('Drawing paths count:', drawingPaths.length);
             console.log('Image loaded status:', imageLoaded);
-            
+
             // Try to capture the image with drawings
             let capturedUri;
             try {
@@ -995,11 +1071,11 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                         quality: 1.0,
                         result: 'base64',
                     });
-                    
+
                     // Convert base64 to file
                     const fileName = `modified_image_${Date.now()}.jpg`;
                     const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-                    
+
                     if (base64Uri && base64Uri.startsWith('data:')) {
                         const base64Data = base64Uri.split(',')[1];
                         await RNFS.writeFile(filePath, base64Data, 'base64');
@@ -1012,7 +1088,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                     // Fallback: create a new image path with timestamp
                     const fileName = `modified_image_${Date.now()}.jpg`;
                     capturedUri = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-                    
+
                     // Copy original image as fallback
                     try {
                         const originalPath = photo.startsWith('file://') ? photo : `file://${photo}`;
@@ -1027,22 +1103,26 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             console.log('Image captured successfully:', capturedUri);
 
             // Determine which image array to update based on the current section
-            const imageType = idSectio === 'report' ? 'rapport' : 
-                            idSectio === 'beforeAfterIntervention' ? 'beforeAfter' : 
-                            idSectio === 'quoteRequest' ? 'DemandeDevis' : 
-                            idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+            const imageType = idSectio === 'report' ? 'rapport' :
+                idSectio === 'beforeAfterIntervention' ? 'beforeAfter' :
+                    idSectio === 'quoteRequest' ? 'DemandeDevis' :
+                        idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
 
             // Update the appropriate image array with the new captured image
             if (imageType === 'rapport') {
-                setImageRapport(prev => prev.map(img => 
-                    img === photo ? capturedUri : img
-                ));
+                setImageRapport(prev => {
+                    const newImages = prev.map(img => img === photo ? capturedUri : img);
+                    saveImagesToState(newImages);
+                    return newImages;
+                });
             } else if (imageType === 'beforeAfter') {
-                setImageBeforeAfterIntervention(prev => prev.map(img => 
-                    img === photo ? capturedUri : img
-                ));
+                setImageBeforeAfterIntervention(prev => {
+                    const newImages = prev.map(img => img === photo ? capturedUri : img);
+                    saveImagesToState(undefined, newImages);
+                    return newImages;
+                });
             } else if (imageType === 'devis') {
-                setDevisImages(prev => prev.map(img => 
+                setDevisImages(prev => prev.map(img =>
                     img === photo ? capturedUri : img
                 ));
             }
@@ -1062,10 +1142,10 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             // Clear drawings and close drawing tools
             clearDrawings();
             setShowDrawingTools(false);
-            
+
             console.log('Image saved successfully to arrays');
             Alert.alert('Succès', 'Image modifiée sauvegardée avec succès!');
-            
+
         } catch (error) {
             console.error('Error recreating and saving image:', error);
             console.error('Error details:', JSON.stringify(error));
@@ -1077,12 +1157,12 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     const saveImageWithDrawings = async () => {
         try {
             console.log('Starting image capture...');
-            
+
             // Wait for the component to be fully rendered
             await new Promise(resolve => setTimeout(resolve, 500));
-            
+
             const targetView = imageContainerRef.current || imageContainerView;
-            
+
             if (!targetView) {
                 console.log('No view available for capture');
                 Alert.alert('Erreur', 'Impossible de trouver le conteneur d\'image');
@@ -1090,7 +1170,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             }
 
             console.log('Attempting to capture image...');
-            
+
             // Try different capture options
             let uri;
             try {
@@ -1107,13 +1187,13 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                     quality: 1.0,
                     result: 'base64',
                 });
-                
+
                 // Convert base64 to file if needed
                 if (uri && uri.startsWith('data:')) {
                     const base64Data = uri.split(',')[1];
                     const fileName = `modified_image_${Date.now()}.jpg`;
                     const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-                    
+
                     await RNFS.writeFile(filePath, base64Data, 'base64');
                     uri = filePath;
                 }
@@ -1126,22 +1206,26 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             }
 
             // Determine which image array to update based on the current section
-            const imageType = idSectio === 'report' ? 'rapport' : 
-                            idSectio === 'beforeAfterIntervention' ? 'beforeAfter' : 
-                            idSectio === 'quoteRequest' ? 'DemandeDevis' : 
-                            idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+            const imageType = idSectio === 'report' ? 'rapport' :
+                idSectio === 'beforeAfterIntervention' ? 'beforeAfter' :
+                    idSectio === 'quoteRequest' ? 'DemandeDevis' :
+                        idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
 
             // Update the appropriate image array
             if (imageType === 'rapport') {
-                setImageRapport(prev => prev.map(img => 
-                    img === photo ? uri : img
-                ));
+                setImageRapport(prev => {
+                    const newImages = prev.map(img => img === photo ? uri : img);
+                    saveImagesToState(newImages);
+                    return newImages;
+                });
             } else if (imageType === 'beforeAfter') {
-                setImageBeforeAfterIntervention(prev => prev.map(img => 
-                    img === photo ? uri : img
-                ));
+                setImageBeforeAfterIntervention(prev => {
+                    const newImages = prev.map(img => img === photo ? uri : img);
+                    saveImagesToState(undefined, newImages);
+                    return newImages;
+                });
             } else if (imageType === 'devis') {
-                setDevisImages(prev => prev.map(img => 
+                setDevisImages(prev => prev.map(img =>
                     img === photo ? uri : img
                 ));
             }
@@ -1149,7 +1233,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             // Clear drawings and close drawing tools
             clearDrawings();
             setShowDrawingTools(false);
-            
+
             console.log('Image saved successfully to arrays');
             Alert.alert('Succès', 'Image modifiée sauvegardée avec succès!');
         } catch (error) {
@@ -1365,8 +1449,27 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     const hasCompteur = localisationsList.some(localisation =>
         localisation.compteurs.length > 0
     );
+
+    const resetAllVariablesToDefault = () => {
+        // Reset all state variables to their default values
+        setText('Détail');
+        setImageRapport([]);
+        setRecordPath('');
+        setLoading(true);
+        setImageBeforeAfterIntervention([]);
+        setImageQuoteRequest([]);
+        setSelectedDebutDateTime(null);
+        setDevisImages([]);
+        AsyncStorage.removeItem('@addressImmeuble');
+        AsyncStorage.removeItem('@noIntervention');
+        AsyncStorage.removeItem('@isAstreinte');
+
+      
+        console.log('🔄 All variables reset to default values');
+    };
     // Handle form submission
     const handleSubmit = async (dateOverride?: Date) => {
+        // setIsSubmittingIntervention(true);
         try {
             // Use the selected dates or fallback to current date
             const startDateTime = selectedDebutDateTime || route.params?.startDateTime || new Date();
@@ -1406,6 +1509,13 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 name: `Rapport_${index}_${endTimestamp}_${noIntervention}__${matricule}.jpg`, // Generate a name if not available
             }));
             // rapportFiiles.push(newRapportFiles)
+
+
+            const demandeDevisFiles = imagequoteRequest.map((asset, index) => ({
+                uri: asset,
+                type: 'image/jpeg', // Fallback to jpeg if mime type not provided
+                name: `DemandeDevis${index}_${endTimestamp}_${noIntervention}__${matricule}.jpg`, // Generate a name if not available
+            }));
 
             // Convert the base64 string to a file object for React Native
             const signPath = await CommonFunction.saveSignature(signature, 'signature') as string
@@ -1448,7 +1558,8 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                     }));
                 }
             }
-
+                let dateFinn = new Date()
+                const f = dateFinn.toLocaleString('fr-FR')
             const formPayload = [
                 noIntervention,
                 codeImmeubleAddresse?.split(';')[0],
@@ -1469,7 +1580,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 latitudeFinHZ, // latitudeFinInterventionHZ
                 longitudeFinHZ, // longitudeFinInterventionHZ
                 dateDebut, // dateDebut
-                dateFin, // dateFin
+                f, // dateFin
                 realisationTimestamp, // dateRealisation
                 flagEnabled, // drapeau
                 overtimeEnabled,
@@ -1484,7 +1595,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 devisAvantTravauxModeReglement, // devisAvantTravauxModeReglement
                 false, // devisAvantTravauxFlagEmail
                 devisAvantTravauxPhotosDevisAvantTravauxFiles, // devisAvantTravauxPhotosDevisAvantTravauxFiles
-                undefined  // demandeDeDevisFiles
+                demandeDevisFiles  // demandeDeDevisFiles
             ];
             if (isConnected) {
                 console.log(formPayload);
@@ -1496,6 +1607,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
 
                 setModalFinIntervention(false)
                 resetInterventionData()
+                resetAllVariablesToDefault()
                 // Alert.alert('Success', 'Intervention updated successfully');
                 navigate(screenNames.HomeScreen)
             } else {
@@ -1506,7 +1618,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
 
                 // End intervention tracking even for offline submissions
                 await InterventionStateService.endIntervention();
-
+                resetAllVariablesToDefault()
                 setModalFinIntervention(false)
                 resetInterventionData()
                 Alert.alert('Hors ligne', 'Votre intervention sera envoyée dès que la connexion sera rétablie.');
@@ -1517,10 +1629,9 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
             console.error('Error updating intervention:', error);
             setModalFinIntervention(false)
             // navigate(screenNames.HomeScreen)
-            Alert.alert('Error', 'Failed to update intervention. Please try again.');
+            Alert.alert('Error', 'une erreur est survenu lors de mise a jour' + error);
         } finally {
-
-            // setLoading(false);
+            setIsSubmittingIntervention(false);
         }
     };
 
@@ -1545,6 +1656,64 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
         });
         return () => unsubscribe();
     }, []);
+
+    // Restore saved intervention data when component mounts
+    useEffect(() => {
+        const restoreSavedData = async () => {
+            try {
+                console.log('🔄 Restoring saved intervention data...');
+                
+                // Restore saved intervention data from InterventionStateService
+                const { formData, images } = await InterventionStateService.restoreInterventionData();
+                
+                if (formData) {
+                    // Restore form data
+                    if (formData.imageRapport && formData.imageRapport.length > 0) {
+                        setImageRapport(formData.imageRapport);
+                        console.log('✅ Restored imageRapport:', formData.imageRapport.length, 'images');
+                    }
+                    if (formData.recordPath) {
+                        setRecordPath(formData.recordPath);
+                        console.log('✅ Restored recordPath:', formData.recordPath);
+                    }
+                    if (formData.speechToText) {
+                        setSpeechToText(formData.speechToText);
+                        console.log('✅ Restored speechToText');
+                    }
+                    if (formData.imagebeforeAfterIntervention && formData.imagebeforeAfterIntervention.length > 0) {
+                        setImageBeforeAfterIntervention(formData.imagebeforeAfterIntervention);
+                        console.log('✅ Restored imagebeforeAfterIntervention:', formData.imagebeforeAfterIntervention.length, 'images');
+                    }
+                    if (formData.imagequoteRequest && formData.imagequoteRequest.length > 0) {
+                        setImageQuoteRequest(formData.imagequoteRequest);
+                        console.log('✅ Restored imagequoteRequest:', formData.imagequoteRequest.length, 'images');
+                    }
+                }
+                
+                if (images) {
+                    // Restore images (fallback if formData doesn't have them)
+                    if (images.imageRapport && images.imageRapport.length > 0 && (!formData || !formData.imageRapport)) {
+                        setImageRapport(images.imageRapport);
+                        console.log('✅ Restored imageRapport from images:', images.imageRapport.length, 'images');
+                    }
+                    if (images.imagebeforeAfterIntervention && images.imagebeforeAfterIntervention.length > 0 && (!formData || !formData.imagebeforeAfterIntervention)) {
+                        setImageBeforeAfterIntervention(images.imagebeforeAfterIntervention);
+                        console.log('✅ Restored imagebeforeAfterIntervention from images:', images.imagebeforeAfterIntervention.length, 'images');
+                    }
+                    if (images.imagequoteRequest && images.imagequoteRequest.length > 0 && (!formData || !formData.imagequoteRequest)) {
+                        setImageQuoteRequest(images.imagequoteRequest);
+                        console.log('✅ Restored imagequoteRequest from images:', images.imagequoteRequest.length, 'images');
+                    }
+                }
+                
+                console.log('✅ Successfully restored saved intervention data');
+            } catch (error) {
+                console.error('❌ Error restoring saved data:', error);
+            }
+        };
+        
+        restoreSavedData();
+    }, []); // Run only once when component mounts
 
     // Add useEffect to receive devis data from DevisAvantTravauxScreen
     useEffect(() => {
@@ -1629,21 +1798,22 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
     // Handler for DebutInterventionModal confirm (for Debut Intervention)
     const handleFinInterventionConfirm = async (date: Date) => {
 
-        setModalFinIntervention(false);
+        setModalFinIntervention(true);
         console.log(date, 'date');
-        
-        setDateFin(date.toLocaleString('fr-FR'))
+        let dateFinn = new Date()
+        setDateFin(dateFinn.toLocaleString('fr-FR'))
         console.log(dateFin, 'dateFin');
-        
+        setIsSubmittingIntervention(true);
+        setModalFinIntervention(false);
         try {
             // Capture current location
             const locationVerifier = new LocationVerifier();
             const currentLocation = await locationVerifier.getCurrentLocation();
-            
+
             // Get building information from intervention context
             const buildingInfo = interventionData?.infos_Immeuble?.[0];
             let isAtBuilding = false;
-            
+
             if (buildingInfo && (buildingInfo as any).latitude && (buildingInfo as any).longitude) {
                 // Add building to location verifier
                 locationVerifier.addBuilding(
@@ -1655,11 +1825,11 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                     (buildingInfo as any).designation || 'Building',
                     50 // 50 meter threshold
                 );
-                
+
                 // Check if user is at the building
                 isAtBuilding = locationVerifier.isAtBuilding('current_building', currentLocation) || false;
             }
-            
+
             // Store location data based on building zone check
             if (isAtBuilding) {
                 // User is at building - store regular coordinates
@@ -1667,7 +1837,7 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 setLongitudeFin(currentLocation.longitude);
                 setLatitudeFinHZ(undefined);
                 setLongitudeFinHZ(undefined);
-                
+
                 console.log('📍 User is at building - storing regular coordinates:', currentLocation);
             } else {
                 // User is outside building zone - store HZ coordinates
@@ -1675,47 +1845,55 @@ const FormulaireInterventionScreen = ({ route, navigation }: FormulaireIntervent
                 setLongitudeFin(undefined);
                 setLatitudeFinHZ(currentLocation.latitude);
                 setLongitudeFinHZ(currentLocation.longitude);
-                
+
                 console.log('📍 User is outside building zone - storing HZ coordinates:', currentLocation);
             }
-console.log(latitudeFin, 'latitudeFin');
-console.log(longitudeFin, 'longitudeFin');
-console.log(latitudeFinHZ, 'latitudeFinHZ');
-console.log(longitudeFinHZ, 'longitudeFinHZ');
-console.log(dateFin, 'dateFin');
+            console.log(latitudeFin, 'latitudeFin');
+            console.log(longitudeFin, 'longitudeFin');
+            console.log(latitudeFinHZ, 'latitudeFinHZ');
+            console.log(longitudeFinHZ, 'longitudeFinHZ');
+            console.log(dateFin, 'dateFin');
             setTimeout(() => handleSubmit(date), 3000);
-            
+
         } catch (error) {
             console.error('❌ Error capturing location:', error);
             // Continue with intervention start even if location capture fails
         }
-        
+
     };
 
     // Add state for image drawing canvas
     const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
     const [drawingImageUri, setDrawingImageUri] = useState<string | null>(null);
-    const [drawingImageType, setDrawingImageType] = useState<'rapport' | 'beforeAfter' | 'DemandeDevis' |'devis' | null>(null);
+    const [drawingImageType, setDrawingImageType] = useState<'rapport' | 'beforeAfter' | 'DemandeDevis' | 'devis' | null>(null);
 
     // Function to open drawing canvas for a specific image
-    const openDrawingCanvas = (imageUri: string, imageType: 'rapport' | 'beforeAfter'| 'DemandeDevis' | 'devis') => {
+    const openDrawingCanvas = (imageUri: string, imageType: 'rapport' | 'beforeAfter' | 'DemandeDevis' | 'devis') => {
         setDrawingImageUri(imageUri);
         setDrawingImageType(imageType);
         setShowDrawingCanvas(true);
+    };
+
+    const openModalFinIntervention = () => {
+setModalFinIntervention(true);
     };
 
     // Function to handle saving drawn image
     const handleSaveDrawnImage = (savedImagePath: string) => {
         if (drawingImageType === 'rapport') {
             // Replace the image in imageRapport array
-            setImageRapport(prev => prev.map(img =>
-                img === drawingImageUri ? savedImagePath : img
-            ));
+            setImageRapport(prev => {
+                const newImages = prev.map(img => img === drawingImageUri ? savedImagePath : img);
+                saveImagesToState(newImages);
+                return newImages;
+            });
         } else if (drawingImageType === 'beforeAfter') {
             // Replace the image in imagebeforeAfterIntervention array
-            setImageBeforeAfterIntervention(prev => prev.map(img =>
-                img === drawingImageUri ? savedImagePath : img
-            ));
+            setImageBeforeAfterIntervention(prev => {
+                const newImages = prev.map(img => img === drawingImageUri ? savedImagePath : img);
+                saveImagesToState(undefined, newImages);
+                return newImages;
+            });
         } else if (drawingImageType === 'devis') {
             // Replace the image in devisImages array
             setDevisImages(prev => prev.map(img =>
@@ -1724,9 +1902,11 @@ console.log(dateFin, 'dateFin');
         }
         else if (drawingImageType === 'DemandeDevis') {
             // Replace the image in devisImages array
-            setImageQuoteRequest(prev => prev.map(img =>
-                img === drawingImageUri ? savedImagePath : img
-            ));
+            setImageQuoteRequest(prev => {
+                const newImages = prev.map(img => img === drawingImageUri ? savedImagePath : img);
+                saveImagesToState(undefined, undefined, newImages);
+                return newImages;
+            });
         }
 
         setShowDrawingCanvas(false);
@@ -1745,7 +1925,7 @@ console.log(dateFin, 'dateFin');
             try {
                 // Check if intervention is already started
                 const isActive = await InterventionStateService.isInterventionActive();
-console.log(isActive, 'isActive');
+                console.log(isActive, 'isActive');
 
                 if (!isActive && noIntervention && codeImmeubleAddresse) {
                     // Start new intervention tracking
@@ -1768,11 +1948,11 @@ console.log(isActive, 'isActive');
                     setLatitudeDebutHZ(interventionInfo.latitudeDebutHZ);
                     setlongitudeDebutHZ(interventionInfo.longitudeDebutHZ);
                     setSelectedDebutDateTime(new Date(interventionInfo.startTime));
-console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
+                    console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
 
                     setDateDebut(interventionInfo?.startDateTime)
                     console.log(selectedDebutDateTime, 'selectedDebutDateTime', interventionInfo.startTime);
-                    
+
                     if (interventionInfo) {
                         setInterventionStartTime(new Date(interventionInfo.startTime));
                         setInterventionDuration(interventionInfo.duration);
@@ -1864,7 +2044,11 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                         </View>
                     </View>
                     <View style={styles.footer}>
-                        <TouchableOpacity style={styles.footerButton} onPress={() => navigate(screenNames.DetailInterventionScreen)}>
+                        <TouchableOpacity style={styles.footerButton} onPress={() =>
+                            navigate(screenNames.DetailInterventionScreen, {
+                                noInterventionParam: noIntervention
+                            })
+                        }>
                             <Image
                                 source={require('./../../../assets/Icons/details.png')}
                                 style={styles.footerIcon}
@@ -1872,20 +2056,20 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                             <Text style={styles.footerButtonText}>Détail</Text>
                         </TouchableOpacity>
                         {hasLocalisations && (
-                        <TouchableOpacity style={styles.footerButton} onPress={() => goToReleveScreen()}>
-                            <View>
-                                <Image
-                                    source={require('./../../../assets/Icons/compteur.png')}
-                                    style={styles.footerIcon}
-                                />
+                            <TouchableOpacity style={styles.footerButton} onPress={() => goToReleveScreen()}>
+                                <View>
+                                    <Image
+                                        source={require('./../../../assets/Icons/compteur.png')}
+                                        style={styles.footerIcon}
+                                    />
                                     {hasCompteur && (
-                                <View style={styles.notificationBadge}>
-                                    <Text style={styles.notificationText}>C</Text>
-                                </View>
+                                        <View style={styles.notificationBadge}>
+                                            <Text style={styles.notificationText}>C</Text>
+                                        </View>
                                     )}
-                            </View>
-                            <Text style={styles.footerButtonText}>Prestations</Text>
-                        </TouchableOpacity>
+                                </View>
+                                <Text style={styles.footerButtonText}>Prestations</Text>
+                            </TouchableOpacity>
                         )}
                         <TouchableOpacity style={styles.footerButton} onPress={() => setStep('step2')}>
                             <Image
@@ -2004,12 +2188,25 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                     </KeyboardAvoidingView>
                     {/* Validate Button */}
                     <View style={styles.footerSubmit}>
-                        <TouchableOpacity style={styles.footerButton} onPress={() => setModalFinIntervention(true)}>
-                            <Image
-                                source={require('./../../../assets/Icons/done.png')}
-                                style={styles.footerIcon}
-                            />
-                            <Text style={styles.footerButtonText}>Valider</Text>
+                        <TouchableOpacity 
+                            style={[styles.footerButton, isSubmittingIntervention && styles.disabledSubmitButton]} 
+                            onPress={() => openModalFinIntervention()}
+                            disabled={isSubmittingIntervention}
+                        >
+                            {isSubmittingIntervention ? (
+                                <>
+                                    <ActivityIndicator size="small" color="#3b5998" />
+                                    <Text style={styles.footerButtonText}>Envoi...</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Image
+                                        source={require('./../../../assets/Icons/done.png')}
+                                        style={styles.footerIcon}
+                                    />
+                                    <Text style={styles.footerButtonText}>Valider</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                     </View>
 
@@ -2249,34 +2446,34 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                                 </GestureDetector>
                             </GestureHandlerRootView>
                         )}
-                        <View style={{ flexDirection: 'row', paddingHorizontal: 50, backgroundColor: '#f5f5f5', }}>
+                        <SafeAreaView >
                             {!showDrawingTools && (
-                                <>
+                                <View style={styles.buttonModalImageContainer}>
                                     <TouchableOpacity style={styles.okButton} onPress={() => deletePicturesByUris(photo)}>
-                                <Image style={styles.icon}
-                                    source={require('../../../assets/Icons/trash.png')} />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
+                                        <Image style={styles.icon}
+                                            source={require('../../../assets/Icons/trash.png')} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
                                         style={[styles.okButton, showDrawingTools && styles.activeDrawingButton]}
                                         onPress={() => {
                                             const imageType = idSectio === 'report' ? 'rapport' :
                                                 idSectio === 'beforeAfterIntervention' ? 'beforeAfter' :
-                                                idSectio === 'quoteRequest' ? 'DemandeDevis' : 
-                                                idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
+                                                    idSectio === 'quoteRequest' ? 'DemandeDevis' :
+                                                        idSectio === 'preWorkQuote' ? 'devis' : 'rapport';
                                             openDrawingCanvas(photo, imageType);
                                         }}
                                     >
                                         <Image style={styles.icon}
                                             source={require('../../../assets/Icons/scribble.png')} />
-                            </TouchableOpacity>
+                                    </TouchableOpacity>
 
                                     <TouchableOpacity style={styles.okButton} onPress={() => setModalVisible(false)}>
-                                    <Image
-                                        source={require('./../../../assets/Icons/done.png')}
-                                        style={styles.icon}
-                                    />
-                                </TouchableOpacity>
-                                </>)}
+                                        <Image
+                                            source={require('./../../../assets/Icons/done.png')}
+                                            style={styles.icon}
+                                        />
+                                    </TouchableOpacity>
+                                </View>)}
                             {showDrawingTools && (
                                 <>
                                     <TouchableOpacity style={styles.icon} onPress={undoLastDrawing}>
@@ -2285,8 +2482,8 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                                     <TouchableOpacity style={styles.icon} onPress={clearDrawings}>
                                         <Text style={styles.iconText}>🗑️</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
-                                        style={[styles.okButton, isSaving && styles.disabledButton]} 
+                                    <TouchableOpacity
+                                        style={[styles.okButton, isSaving && styles.disabledButton]}
                                         onPress={recreateAndSaveImage}
                                         disabled={isSaving}
                                     >
@@ -2299,7 +2496,7 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                                     </TouchableOpacity>
                                 </>
                             )}
-                        </View>
+                        </SafeAreaView>
 
                         {/* Drawing Tools Panel */}
                         {showDrawingTools && (
@@ -2319,7 +2516,7 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                                                 onPress={() => setSelectedColor(color)}
                                             />
                                         ))}
-                    </View>
+                                    </View>
                                 </View>
 
                                 {/* Stroke Width Picker */}
@@ -2430,7 +2627,7 @@ console.log(interventionInfo?.startDateTime, 'interventionInfo?.startDateTime');
                 />
             </Modal>
 
-            <DebutInterventionModal
+            <FinInterventionModal                                                                               
                 visible={modalFinIntervenion}
                 onClose={() => setModalFinIntervention(false)}
                 onConfirm={handleFinInterventionConfirm}
@@ -2449,6 +2646,15 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    buttonModalImageContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '90%',
+        // paddingHorizontal: 50,
+        backgroundColor: '#f5f5f5',
+        // borderWidth: 1
     },
     icon: {
         width: 35,
@@ -2675,7 +2881,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         // borderTopWidth: 1,
         borderTopColor: '#ddd',
-        width: '100%'
+        // width: '100%'
     },
     okButtonText: {
         fontSize: 16,
@@ -3235,6 +3441,9 @@ const styles = StyleSheet.create({
     disabledButton: {
         opacity: 0.5,
         backgroundColor: '#cccccc',
+    },
+    disabledSubmitButton: {
+        opacity: 0.6,
     }
 })
 

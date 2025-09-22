@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
+import {
     // Import from the generated APIs directly
     AuthenticationApi,
     InterventionApi,
@@ -66,18 +66,18 @@ export const apiService = {
             const apiClient = new AuthenticationApi(new Configuration({
                 basePath: BASE_URL,
             }));
-            
+
             const response = await apiClient.apiAuthenticationLoginPost({
                 loginInputDTO: loginInput
             });
-            
+
             console.log('✅ Login successful:', response);
-            
+
             if (response.status === 'success' && response.value) {
                 await setToken(response.value);
                 console.log('🔑 Token saved successfully');
             }
-            
+
             return response;
         } catch (error: any) {
             console.error('❌ Login failed:', error);
@@ -93,7 +93,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionPlanningGet({ token });
             console.log('✅ Planning fetched successfully');
             return response;
@@ -110,7 +110,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionGMAOGet({ token });
             console.log('✅ GMAO data fetched successfully');
             return response;
@@ -127,7 +127,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionGetDrapeuxGet({ token });
             console.log('✅ Drapeaux fetched successfully');
             return response;
@@ -144,7 +144,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionGetAlertesGet({ token });
             console.log('✅ Alertes fetched successfully');
             return response;
@@ -161,16 +161,16 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             // Convert File[] to Blob[] for generated API
             const blobFiles = rapportVocalFiles?.map(file => new Blob([file])) || [];
-            
+
             const response = await apiClient.apiInterventionConvertAudioToTextPost({
                 token,
                 speechToText,
                 rapportVocalFiles: blobFiles
             });
-            
+
             console.log('✅ Audio conversion successful');
             return response;
         } catch (error: any) {
@@ -186,12 +186,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionGetInfoInterventionGet({
                 token,
                 noIntervention
             });
-            
+
             console.log('✅ Intervention detail fetched successfully');
             return response;
         } catch (error: any) {
@@ -207,12 +207,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiInterventionGetHistoriqueInterventionPost({
                 token,
                 historiqueInterventionInput
             });
-            
+
             console.log('✅ Intervention history fetched successfully');
             return response;
         } catch (error: any) {
@@ -264,7 +264,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             // Convert File[] to Blob[] for generated API
             const signatureBlob = signature ? new Blob([signature]) : undefined;
             const rapportVocalBlobs = rapportVocalRapportVocalFiles?.map(file => new Blob([file])) || [];
@@ -273,7 +273,7 @@ export const apiService = {
             const devisAvantTravauxSignatureBlob = devisAvantTravauxSignature ? new Blob([devisAvantTravauxSignature]) : undefined;
             const devisAvantTravauxPhotosBlobs = devisAvantTravauxPhotosDevisAvantTravauxFiles?.map(file => new Blob([file])) || [];
             const demandeDeDevisBlobs = demandeDeDevisFiles?.map(file => new Blob([file])) || [];
-            
+
             const response = await apiClient.apiInterventionUpdateInterventionPost({
                 token,
                 noIntervention,
@@ -312,7 +312,7 @@ export const apiService = {
                 devisAvantTravauxPhotosDevisAvantTravauxFiles: devisAvantTravauxPhotosBlobs,
                 demandeDeDevisFiles: demandeDeDevisBlobs
             });
-            
+
             console.log('✅ Intervention updated successfully');
             return response;
         } catch (error: any) {
@@ -329,13 +329,13 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiImmeubleGetInfoImmeublePaginationGet({
                 token,
                 pageNumber,
                 pageSize
             });
-            
+
             console.log('✅ Immeubles pagination fetched successfully');
             return response;
         } catch (error: any) {
@@ -351,12 +351,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiImmeubleCheckSyncIsRequiredPost({
                 token,
                 checkSyncRequiredInput
             });
-            
+
             console.log('✅ Sync requirement checked successfully');
             return response;
         } catch (error: any) {
@@ -372,12 +372,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiImmeubleConfirmSyncPost({
                 token,
                 checkSyncRequiredInput
             });
-            
+
             console.log('✅ Sync confirmed successfully');
             return response;
         } catch (error: any) {
@@ -393,12 +393,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiImmeubleGetImmeublesToSyncPost({
                 token,
                 checkSyncRequiredInput
             });
-            
+
             console.log('✅ Immeubles to sync fetched successfully');
             return response;
         } catch (error: any) {
@@ -414,12 +414,12 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiImmeubleGetHistoriqueDevisImmeublePost({
                 token,
                 historiqueDevisInput
             });
-            
+
             console.log('✅ Devis history fetched successfully');
             return response;
         } catch (error: any) {
@@ -436,13 +436,15 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetCountOfItemsGet({ token });
             console.log('✅ Count of items fetched successfully');
             return response;
         } catch (error: any) {
+
             console.error('❌ Get count of items failed:', error);
-            throw new Error(`Get count of items failed: ${error.message || 'Unknown error'}`);
+            let f: CountOfItemsDTO = {}
+            return f ;
         }
     },
 
@@ -453,7 +455,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetAllArticleDevisGet({ token });
             console.log('✅ Article devis fetched successfully');
             return response;
@@ -470,7 +472,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetAllModeReglementGet({ token });
             console.log('✅ All mode reglement fetched successfully');
             return response;
@@ -487,7 +489,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetAllQualificationGet({ token });
             console.log('✅ All qualifications fetched successfully');
             return response;
@@ -504,7 +506,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetAllPriPrimeGet({ token });
             console.log('✅ All prime conventionnelle fetched successfully');
             return response;
@@ -521,7 +523,7 @@ export const apiService = {
                 basePath: BASE_URL,
             }));
             const token = await getTokenOrUndefined();
-            
+
             const response = await apiClient.apiReferentielGetAllPriPrimeGet({ token });
             console.log('✅ All pri primes fetched successfully', response);
             return response;
@@ -539,7 +541,7 @@ export const apiService = {
     }> => {
         try {
             console.log('🔄 Starting full sync process with generated API...');
-            
+
             // Step 1: Check if sync is required
             console.log('📋 Checking if sync is required...');
             const syncRequiredResponse = await apiService.checkSyncRequired(checkSyncRequiredInput);

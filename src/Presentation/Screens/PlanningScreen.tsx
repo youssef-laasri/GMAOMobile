@@ -24,29 +24,32 @@ const PlanningScreen = ({ navigation }) => {
 
   const [notificationsHistoriqueItems, setNotificationsHistoriqueItems] = useState<InterventionPlanningDTO[]>([]);
 
-  const fetchDataPlanning = async () => {
-    try {
-      const response = await apiService.getPlanning();;
-      const json = await response.result;
-      setNotifications(json);
-      setNotificationsHistoriqueItems(json?.historiqueIntervention as [])
-      setNotificationsItems(notifications?.interventionJour as [])
-      setNotificationsItemsEnAttente(notifications?.interventionEnAttente as [])
-      updateTabCount("JOUR", notifications?.interventionJour?.length)
-      updateTabCount("EN_ATTENTE", notifications?.interventionEnAttente?.length)
-      setLoading(false)
-    } catch (err) {
-      // setError('Failed to fetch data');
-      console.error(err);
-    } finally {
-      // setLoading(false);
-    }
-  };
+
 
 
   useEffect(() => {
+    const fetchDataPlanning = async () => {
+      try {
+        const response = await apiService.getPlanning();;
+        const json = await response.result;
+        setNotifications(json);
+        setNotificationsHistoriqueItems(json?.historiqueIntervention as [])
+        setNotificationsItems(json?.interventionJour as [])
+        setNotificationsItemsEnAttente(json?.interventionEnAttente as [])
+        updateTabCount("JOUR", json?.interventionJour?.length)
+        updateTabCount("EN_ATTENTE", json?.interventionEnAttente?.length)
+        console.log(json,'json',notifications?.interventionJour?.length,notifications?.interventionEnAttente?.length);
+        
+        setLoading(false)
+      } catch (err) {
+        // setError('Failed to fetch data');
+        console.error(err);
+      } finally {
+        // setLoading(false);
+      }
+    };
     fetchDataPlanning()
-  },[notificationsItems, notificationsItemsEnAttente, notificationsHistoriqueItems])
+  },[])
 
 
   const updateTabCount = (tabId, newCount) => {
@@ -257,7 +260,8 @@ const styles = StyleSheet.create({
     height: '100%'
   },
   emptyText: {
-    color: '#999',
+    // color: '#999',
+    color: 'black',
     fontSize: 16,
     fontWeight: 'bold'
   },
@@ -272,6 +276,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   buildingCode: {
+    color: 'black',
     fontSize: 18,
     fontWeight: '700',
     // marginBottom: 0,
@@ -282,17 +287,20 @@ const styles = StyleSheet.create({
 
   },
   address: {
+    color: 'black',
     fontSize: 10.8,
     marginBottom: 1,
     lineHeight: 17
 
   },
   issue: {
+    color: 'black',
     fontSize: 12,
     // fontWeight: 'bold',
     marginBottom: 1,
   },
   date: {
+    color: 'black',
     fontSize: 13,
     // fontStyle: 'italic',
   },
