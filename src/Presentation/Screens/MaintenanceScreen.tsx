@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, TextInput, Alert, BackHandler, AppState } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, TextInput, Alert, BackHandler, AppState, TouchableWithoutFeedback } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import Header from '../Components/Header'
 import screenNames from '../../Infrastructure/Navigation/navigationNames';
@@ -100,14 +100,22 @@ export default function MaintenanceScreen() {
 
     const [visibleModal, setVisibleModal] = useState(false);
     const [pwd, setPwd] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const handleModalClose = () => {
+        setVisibleModal(false);
+        setPwd(''); // Clear password when modal closes
+        setShowPassword(false); // Reset password visibility
+    };
+
     const goToLoginPage = async () => {
         if (pwd == '123456') {
             const db = await SqlLIteService.getDBConnection();
             await SqlLIteService.deleteTable(db, 'loginInfo')
+            handleModalClose(); // Use the close function
             navigate(screenNames.LoginScreen);
         }
         else {
-            setVisibleModal(false)
+            handleModalClose(); // Use the close function
             Alert.alert("Mot de passe incorrect", "");
         }
     }
@@ -142,25 +150,45 @@ export default function MaintenanceScreen() {
                 visible={visibleModal}
                 transparent={true}
                 animationType="fade"
+                onRequestClose={handleModalClose}
             >
-                <SafeAreaView style={styles.centeredView}>
-                    <View style={styles.modalView}>
-                        <View style={styles.modalTitle}>
-                            <Text style={styles.modalTitle}> Mot de passe? </Text>
-                        </View>
-                        <View style={styles.inputRow}>
-                            <TextInput
-                                style={styles.inputValue}
-                                placeholder="Saisir mot de passe"
-                                value={pwd}
-                                onChangeText={setPwd}
-                            />
-                        </View>
+                <TouchableWithoutFeedback onPress={handleModalClose}>
+                    <SafeAreaView style={styles.centeredView}>
+                        <TouchableWithoutFeedback onPress={() => {}}>
+                            <View style={styles.modalView}>
+                                <View style={styles.modalTitle}>
+                                    <Text style={styles.modalTitle}> Mot de passe? </Text>
+                                </View>
+                                <View style={styles.inputRow}>
+                                    <TextInput
+                                        style={styles.inputValue}
+                                        placeholder="Saisir mot de passe"
+                                        value={pwd}
+                                        onChangeText={setPwd}
+                                        secureTextEntry={!showPassword}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        placeholderTextColor="#999"
+                                    />
+                                    <TouchableOpacity 
+                                        style={styles.eyeIconContainer}
+                                        onPress={() => setShowPassword(!showPassword)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Image
+                                            source={showPassword ? 
+                                                require('../../../assets/Icons/Eye.png') : 
+                                                require('../../../assets/Icons/Crossed-Eye.png')
+                                            }
+                                            style={styles.eyeIcon}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
 
                         <View style={styles.buttonRow}>
                             <TouchableOpacity
                                 style={[styles.button, styles.cancelButton]}
-                                onPress={() => setVisibleModal(false)}
+                                onPress={handleModalClose}
                             >
                                 <Text style={styles.buttonText}>ANNULER</Text>
                             </TouchableOpacity>
@@ -173,8 +201,10 @@ export default function MaintenanceScreen() {
                                 <Text style={styles.buttonText}>OK</Text>
                             </TouchableOpacity>
                         </View>
-                    </View>
-                </SafeAreaView>
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </SafeAreaView>
+                </TouchableWithoutFeedback>
             </Modal>
         </SafeAreaView>
     )
@@ -245,6 +275,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 8,
         paddingHorizontal: 10,
+        position: 'relative',
     },
     inputLabel: {
         fontSize: 14,
@@ -256,6 +287,19 @@ const styles = StyleSheet.create({
         flex: 1,
         borderColor: '#ccc',
         borderBottomWidth: 1,
+        paddingRight: 50,
+        paddingVertical: 8,
+    },
+    eyeIconContainer: {
+        position: 'absolute',
+        right: 15,
+        padding: 8,
+        zIndex: 1,
+    },
+    eyeIcon: {
+        width: 22,
+        height: 22,
+        tintColor: '#666',
     },
     buttonRow: {
         flexDirection: 'row',

@@ -231,14 +231,80 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         let formattedName = name.replace(/^__/, '');
         // Replace underscores with spaces
         formattedName = formattedName.replace(/_/g, ' ');
+        // Clean any \r\n characters
+        formattedName = formattedName.replace(/[\r\n]/g, ' ').trim();
         // Capitalize first letter
         return formattedName.charAt(0).toUpperCase() + formattedName.slice(1);
+    };
+
+    // Format date value with ISO 8601 detection and conversion
+    const formatDateValue = (value: any): string => {
+        console.log('=== formatDateValue called ===');
+        console.log('Input value:', JSON.stringify(value));
+        console.log('Type:', typeof value);
+        
+        if (typeof value === 'string') {
+            console.log('Processing as string...');
+            
+            // Handle both actual \r\n characters and literal \r\n strings
+            let cleanedValue = value
+                .replace(/\\r\\n/g, ' ')  // Replace literal \r\n
+                .replace(/\\n/g, ' ')     // Replace literal \n
+                .replace(/\\r/g, ' ')     // Replace literal \r
+                .replace(/[\r\n]/g, ' ')  // Replace actual \r\n characters
+                .replace(/\s+/g, ' ')     // Multiple spaces to single space
+                .trim();
+            console.log('After cleaning:', JSON.stringify(cleanedValue));
+            
+            // Then check if it's a date
+            const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+            const isDate = iso8601Regex.test(cleanedValue);
+            
+            console.log('Is ISO date:', isDate);
+            
+            if (isDate) {
+                console.log('Processing as date...');
+                try {
+                    const date = new Date(cleanedValue);
+                    
+                    if (!isNaN(date.getTime())) {
+                        // Convert to local timezone
+                        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+                        
+                        const day = localDate.getDate().toString().padStart(2, '0');
+                        const month = (localDate.getMonth() + 1).toString().padStart(2, '0');
+                        const year = localDate.getFullYear();
+                        const hours = localDate.getHours().toString().padStart(2, '0');
+                        const minutes = localDate.getMinutes().toString().padStart(2, '0');
+                        const seconds = localDate.getSeconds().toString().padStart(2, '0');
+                        
+                        const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                        console.log('Formatted date:', formattedDate);
+                        return formattedDate;
+                    }
+                } catch (error) {
+                    console.warn('Error parsing date:', error);
+                }
+            }
+            
+            console.log('Processing as non-date string...');
+            console.log('Returning cleaned value:', JSON.stringify(cleanedValue));
+            
+            // Return the cleaned value (whether it was a date or not)
+            return cleanedValue;
+        }
+        
+        console.log('Not a string, returning:', value);
+        return value || '';
     };
 
     // Format field value for display
     const formatFieldValue = (value) => {
         if (typeof value === 'number') return value.toString();
         if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+        if (typeof value === 'string') {
+            return formatDateValue(value); // Use the new date formatting function
+        }
         return value || '';
     };
 
@@ -247,12 +313,13 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
         if (!isDisplayableValue(value)) return null;
 
         const isPhoneField = key.toLowerCase().startsWith('tel');
-        const phoneNumber = isPhoneField ? formatFieldValue(value) : null;
+        const displayValue = formatFieldValue(value); // This will clean the value for display
+        const phoneNumber = isPhoneField ? displayValue : null;
 
         return (
             <View key={key} style={styles.infoRow}>
                 <Text style={styles.infoLabel}>{formatFieldName(key)} : </Text>
-                <Text style={styles.infoValue}>{formatFieldValue(value)}</Text>
+                <Text style={styles.infoValue}>{displayValue}</Text>
                 {isPhoneField && phoneNumber && (
                     <TouchableOpacity 
                         style={styles.phoneIconContainer}
@@ -448,7 +515,7 @@ const DetailIntervention = ({ route, navigation }: DetailInterventionProps) => {
                     <ScrollView style={styles.infoDetailContainer}>
                         {compo === 'intervention' && <View style={styles.header}>
                             <Text style={styles.headerTitle}>{infoInter?.header.title}</Text>
-                            <Text style={styles.addressText}>{infoInter?.header.address}</Text>
+                            <Text style={styles.addressText}>{infoInter?.header.address?.replace(/[\r\n]/g, ' ').trim()}</Text>
                             {selectedDebutDateTime && (
                                 <Text style={styles.selectedDateTimeText}>
                                     📅 Début sélectionné: {selectedDebutDateTime.toLocaleString('fr-FR')}
